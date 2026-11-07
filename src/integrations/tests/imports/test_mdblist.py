@@ -459,11 +459,11 @@ class ImportMDBList(TestCase):
         self.assertEqual(tv.status, Status.IN_PROGRESS.value)
         self.assertEqual(Episode.objects.filter(item__media_id="12345").count(), 1)
 
-    def test_season_rating_without_watch_does_not_fabricate_plays(self):
-        """A season that is only rated stores the score without a watch.
+    def test_season_rating_does_not_mark_season_watched(self):
+        """A season rating without a watch stores the score and no episode plays.
 
-        Creating it as COMPLETED let the completed-season backfill mark every
-        episode watched with the import time as the play date.
+        MDBList ratings are not watch evidence (issue #1851). The season must
+        stay statusless so the completed-season backfill creates no episodes.
         """
         responses = {
             "/sync/ratings": {
@@ -479,46 +479,29 @@ class ImportMDBList(TestCase):
                 ],
             },
         }
-        season_metadata = {
-            "title": "Season 1",
-            "image": "season_image.jpg",
-            "episodes": [
-                {"episode_number": 1, "still_path": "/still.jpg"},
-                {"episode_number": 2, "still_path": None},
-            ],
-            "max_progress": 2,
-            "_tvdb_episode_image_map": {},
-        }
-        with patch(
-            "app.providers.services.get_media_metadata",
-            side_effect=lambda media_type, *_a, **_kw: (
-                season_metadata if media_type == MediaTypes.SEASON.value else {}
-            ),
-        ):
-            self._run_import(responses)
+        self._run_import(responses)
 
         season = Season.objects.get(item__media_id="12345", user=self.user)
         self.assertIsNone(season.status)
         self.assertEqual(season.score, 7)
-        self.assertIsNone(season.related_tv.status)
         self.assertFalse(Episode.objects.filter(related_season=season).exists())
 
-    def test_movie_and_show_rating_without_watch_are_statusless(self):
-        """A movie or show that is only rated is not marked watched."""
+    def test_movie_and_show_ratings_do_not_mark_media_watched(self):
+        """A rating on unwatched media stores only the score (issue #1851)."""
         responses = {
             "/sync/ratings": {
                 "movies": [
                     {
                         "rated_at": "2023-01-03T00:00:00Z",
                         "rating": 8,
-                        "movie": {"title": "Rated Movie", "ids": {"tmdb": 67890}},
+                        "movie": {"title": "Test Movie", "ids": {"tmdb": 67890}},
                     },
                 ],
                 "shows": [
                     {
                         "rated_at": "2023-01-03T00:00:00Z",
                         "rating": 6,
-                        "show": {"title": "Rated Show", "ids": {"tmdb": 777}},
+                        "show": {"title": "Rated Show", "ids": {"tmdb": 11111}},
                     },
                 ],
             },
@@ -528,13 +511,12 @@ class ImportMDBList(TestCase):
         movie = Movie.objects.get(item__media_id="67890", user=self.user)
         self.assertIsNone(movie.status)
         self.assertEqual(movie.progress, 0)
-        self.assertIsNone(movie.end_date)
         self.assertEqual(movie.score, 8)
+        self.assertIsNone(movie.end_date)
 
-        show = TV.objects.get(item__media_id="777", user=self.user)
+        show = TV.objects.get(item__media_id="11111", user=self.user)
         self.assertIsNone(show.status)
         self.assertEqual(show.score, 6)
-        self.assertFalse(Season.objects.filter(item__media_id="777").exists())
 
     def test_rerating_a_saved_episode_names_the_row_it_changed(self):
         """The score update sends no signal, so the import must report the row."""

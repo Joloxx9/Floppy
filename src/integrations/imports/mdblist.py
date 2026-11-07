@@ -862,22 +862,23 @@ class MDBListImporter(TraktMetadataResolverMixin):
                 except Exception:
                     self._entry_error_warning(entry, "rating")
 
-    # A rating says nothing about whether the user watched the media. When it
-    # isn't already tracked from history or the watchlist, store the score
-    # without a status rather than inventing a watch (mirrors the Trakt importer).
-
     def _process_movie_rating(self, entry):
-        """Apply a movie rating, creating a statusless movie if needed."""
+        """Apply a movie rating, storing the score without tracking the movie."""
         self._process_rated_media_item(
             entry,
             entry.get("movie") or {},
             MediaTypes.MOVIE.value,
             app.models.Movie,
-            {"score": entry["rating"], "status": None},
+            {
+                "score": entry["rating"],
+                # A rating says nothing about whether the user watched it.
+                # Leave the row statusless so it stays out of the lists.
+                "status": None,
+            },
         )
 
     def _process_show_rating(self, entry):
-        """Apply a show rating, creating a statusless show if needed."""
+        """Apply a show rating, storing the score without tracking the show."""
         self._process_rated_media_item(
             entry,
             entry.get("show") or {},
@@ -945,6 +946,8 @@ class MDBListImporter(TraktMetadataResolverMixin):
             item=season_item,
             user=self.user,
             related_tv=tv_obj,
+            # A rating is not a watch: the season keeps no status, so it never
+            # triggers the completed-season episode backfill.
             status=None,
             score=entry["rating"],
         )
