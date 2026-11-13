@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'r
 import { MediaCard } from './MediaCard.jsx';
 import { Rail } from './Rail';
 import { createFetchGate } from './fetchGate.js';
+import { sectionSpacing } from './sectionSpacing.js';
 
 // Web and native shelves must pick the same card width. Web computes it from
 // the phone breakpoint in mountHome; native passes the same value from here.
@@ -17,19 +18,6 @@ export function shelfCardWidth(viewportWidth, mobileGridLayout = 'compact') {
     return Math.min(SHELF_COMFORTABLE_MAX_WIDTH, Math.floor((viewportWidth - 32 - 12) / 2));
   }
   return SHELF_CARD_WIDTHS.phone;
-}
-
-// Video and mixed-media shelves keep the release card widths: landscape video
-// rows are 17rem, mixed rows give square artwork 16.5rem and video 29.33rem.
-// On phones they scale from the poster width the way the release CSS did.
-export function railItemWidth(row, item, baseWidth) {
-  const phone = baseWidth <= SHELF_CARD_WIDTHS.phone;
-  if (row?.videoLandscape) return phone ? 168 : 272;
-  if (row?.mixedMedia) {
-    if (item?.card?.video) return phone ? Math.round((baseWidth * 8) / 3) : 469;
-    if (item?.card?.shape === 'square') return phone ? Math.round(baseWidth * 1.5) : 264;
-  }
-  return baseWidth;
 }
 
 const DEFAULT_PALETTE = {
@@ -154,7 +142,6 @@ const RailRow = React.memo(function RailRow({
     loadingMore={loadingMore}
     sorting={sorting}
     itemWidth={itemWidth}
-    getItemWidth={item => railItemWidth(row, item, itemWidth)}
     items={items}
     viewAll={row.viewAll ? { label: row.viewAll.label, onPress: () => onOpenLink?.(row.viewAll.href, null, row) } : undefined}
     onTitlePress={row.url && onOpenRowTitle && (canOpenRowTitle ? canOpenRowTitle(row.url) : true) ? () => onOpenRowTitle(row.url, row) : undefined}
@@ -229,7 +216,7 @@ export function HomeShelves({
   const palette = mergePalette(suppliedPalette);
   // Release separates media-type groups by 1rem on phones and 2rem from `sm`.
   const viewport = useWindowDimensions();
-  const sectionGap = viewport.width >= 640 ? 32 : 16;
+  const sectionGap = sectionSpacing(viewport.width);
   const [loadedRows, setLoadedRows] = useState({});
   const [rowPatches, setRowPatches] = useState({});
   const [pendingRows, setPendingRows] = useState({});

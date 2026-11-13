@@ -18,11 +18,18 @@ from django.urls import reverse
 from django.utils import translation
 
 from app import db_diagnostics, request_timing, stall_watchdog
-from app.db_retry import is_contention_error, is_lock_error, is_retryable_error
+from app.db_retry import (
+    is_contention_error,
+    is_lock_error,
+    is_retryable_error,
+    read_request,
+)
 from app.discover import tab_cache as discover_tab_cache
 from app.error_views import format_exception_traceback, render_error_page
 from app.interactive_requests import (
-    mark_interactive_request,
+    marks_api_request,
+    marks_page_request,
+    refresh_interactive_mark,
     should_mark_interactive_request,
 )
 from app.models import Sources
@@ -288,6 +295,9 @@ class DatabaseRetryMiddleware:
     def __call__(self, request):
         """Process the request with retry logic for database errors."""
         with db_diagnostics.bind_request(request):
+            if request.method in {"GET", "HEAD"}:
+                with read_request():
+                    return self._run(request)
             return self._run(request)
 
     def _run(self, request):
@@ -536,16 +546,7 @@ class DiscoverWarmupMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        """Mark active browsing and queue Discover warmup when eligible."""
-        if should_mark_interactive_request(request):
-            try:
-                mark_interactive_request()
-            except Exception as error:
-                logger.debug(
-                    "Skipping interactive-request marker for %s due to error: %s",
-                    request.path,
-                    error,
-                )
+        """Queue Discover warmup when eligible, and mark first-party API reads."""
         if self._should_warm_discover(request):
             try:
                 discover_tab_cache.maybe_schedule_user_warmup(request.user)
@@ -555,7 +556,27 @@ class DiscoverWarmupMiddleware:
                     request.path,
                     error,
                 )
-        return self.get_response(request)
+        response = self.get_response(request)
+        # The credential is only known once DRF has authenticated the view.
+        if marks_api_request(request):
+            self._mark(request)
+        return response
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        """Mark a person's page load before its view runs (URL known, polls excluded)."""
+        if marks_page_request(request):
+            self._mark(request)
+
+    @staticmethod
+    def _mark(request: HttpRequest) -> None:
+        try:
+            refresh_interactive_mark()
+        except Exception as error:
+            logger.debug(
+                "Skipping interactive-request marker for %s due to error: %s",
+                request.path,
+                error,
+            )
 
     def _should_warm_discover(self, request: HttpRequest) -> bool:
         if (
@@ -627,6 +648,7 @@ class DemoAccountGuardMiddleware:
             "revoke_integration_token",
             "create_catalog_grant",
             "revoke_catalog_grant",
+            "oauth_revoke_application",
             "save_provider_credential",
             "save_personal_credential",
             "clear_provider_credential",
