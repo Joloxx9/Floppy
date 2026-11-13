@@ -29,6 +29,13 @@ Legacy account tokens are deliberately unrestricted. They predate scopes, they
 are the credential every existing integration was set up with, and narrowing
 them would break working installs. Scoping is what the named tokens are for.
 
+`SessionAuthentication` is in `REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]`,
+so the table above holds for every endpoint rather than only the ones that opt
+in with a mixin. DRF enforces CSRF on unsafe methods for sessions; the native
+client sends `X-CSRFToken` and refreshes it from `/accounts/login/` when the
+server rotates it. Token clients are unaffected: they authenticate before the
+session class is reached.
+
 ## Enforcement rules
 
 All token authentication requires an active account. Disabling an account
@@ -47,10 +54,22 @@ recheck account activity before processing.
 4. `"*"` in a token's scopes is a full grant over every mapped endpoint. It does
    not defeat `NEVER`.
 
+`GET /api/v1/media/{media_type}/{source}/{media_id}/detail/` is public metadata
+for anonymous readers. Authenticated requests also receive only that viewer's
+tracking row and require `watchlist:read`; `?public_view=1` suppresses personal
+state and action capabilities even when the request is authenticated.
+
 `ScopeMapCoverageTests` fails the build when a routed view or method is missing
 from the map, when a map entry no longer matches a route, or when a mapped scope
 is not in the vocabulary. Adding an endpoint therefore requires deciding its
 scope; forgetting is not one of the outcomes.
+
+The Expo library uses `user:read`/`user:write` for saved-view CRUD, `lists:write`
+for bulk list membership, and `watchlist:read`/`watchlist:write` for bulk
+collection and its user-owned Add Plays preview/status and write operations.
+Bulk operations validate their inputs, return `400` for invalid input, `404` when
+a saved view or job is not owned by the caller, and `409` when another Add Plays
+write is running.
 
 ## What the map does not cover
 
@@ -86,7 +105,7 @@ Do not describe Floppy as fully scope-gated until those are addressed.
 | `sync:read` / `sync:write` | Read sync connections, the change feed, and conflicts; resolve a conflict |
 | `imports:read` / `imports:write` | Import activity; start imports |
 | `exports:read` | Download exports |
-| `user:read` / `user:write` | Preferences, sidebar, notification settings |
+| `user:read` / `user:write` | Preferences, saved library views, sidebar, notification settings |
 
 ## Creating a token
 

@@ -43,11 +43,15 @@ Status: `Partial / coexisting`
 - `src/templates/app/components/sidebar_pin_menu.html`
 - `src/templates/base.html`
 - `frontend/ui/GlobalSearch.jsx`, `frontend/ui/mountGlobalSearch.jsx`, `frontend/ui/global-search.css` (header search form inside `base.html`; suggestions stay a server fragment)
-- `frontend/ui/Sidebar.jsx`, `frontend/ui/mountSidebar.jsx`, `frontend/ui/sidebar.css`, `src/app/sidebar_model.py` (signed-in sidebar inside `base.html`; the onboarding banner stays a server slot)
+- `frontend/ui/Sidebar.jsx`, `frontend/ui/mountSidebar.jsx`, `frontend/ui/sidebar.css`, `frontend/ui/dropdownMetrics.js`, `src/app/sidebar_model.py` (signed-in sidebar inside `base.html` and Expo; Explore overlays the media-type rows at its content height, capped to the sidebar viewport, scrolls its options when needed and closes when the last option is pinned; native adapter supplies 44-point rows, a 25-point top inset on iOS side-rail layouts, margins accounting for each safe-area inset, and hides Appearance; the onboarding banner stays a server slot)
+- `native-proof/app/surfaces/ShellSlot.jsx`, `native-proof/app/surfaces/NativeShell.ios.jsx`, `native-proof/app/surfaces/NativeShell.jsx`, `native-proof/app/surfaces/NativeRoot.ios.jsx`, `native-proof/app/surfaces/NativeRoot.jsx`, `native-proof/app/safeAreaSpacing.mjs`, `native-proof/app/surfaces/menuGeometry.mjs`, `native-proof/app/routes/_layout.jsx`, `native-proof/app/routes/index.jsx`, `native-proof/App.js` (Expo navigation model, native toolbar and drawer/canvas transition; iOS animates drawer geometry in both fold directions unless Reduce Motion is enabled; an iOS screen-scoped safe-area provider supplies live horizontal insets while the navigator supplies vertical insets; the foreground shell reserves those insets and shared spacing subtracts them from the usual Search and sidebar margins; `useVerticalBarEdgeIOS` supplies the rail trait and reserved regions remain for fold layout; Android and web retain the shared modal path)
 - `frontend/ui/Icon.jsx`, `src/app/icon_specs.py` (shared icon shapes for React; used by the sidebar and the card hover buttons)
 - `src/app/card_events.py` (the floppyCardUpdate event sent by `media_save` and the score views so React cards refresh their status chip and rating)
-- `frontend/ui/mountFilterChips.jsx`, `ScrollRow` and `FilterChips` in `frontend/ui/controls.jsx` (Discover media-type row; `Tabs` shares `ScrollRow`)
+- `frontend/ui/mountFilterChips.jsx`, `ScrollRow` and `FilterChips` in `frontend/ui/controls` (Discover media-type row; `Tabs` shares `ScrollRow`)
 - `src/templates/base_public.html`
+
+- `native-proof/app/components/NativeStatusBar.jsx`, `native-proof/app/components/NativeStatusBar.ios.jsx`, `native-proof/app/theme.js`, `native-proof/app/systemColor.ios.js`, `native-proof/app/systemColor.js` (iOS system semantic colors; other hosts retain the existing proof palette)
+- `native-proof/app/components/Screen.jsx`, `native-proof/app/components/Screen.ios.jsx` (shared screen presentation; iOS applies the remaining 22-point page margin after the shell's safe-area inset on each side)
 
 ## SETTINGS-CARD
 
@@ -58,7 +62,7 @@ Status: `Web Migrated`
 - `frontend/settings/SettingsCard.jsx`
 - `frontend/settings/index.js`
 - `frontend/settings/mount.jsx`
-- `frontend/settings/root.jsx`
+- `frontend/settings/root.web.js`
 - `frontend/settings/webPalette.js`
 - `frontend/settings/settings-card.css`
 - `src/templates/app/components/ui_asset_refresh.html`
@@ -74,9 +78,15 @@ build artifacts. The Python composition tag is documented in the register.
 
 ## FORM-CONTROLS
 
+- `frontend/ui/Modal.jsx`, `frontend/ui/Modal.native.jsx`, `frontend/ui/Modal.web.jsx` (shared modal boundary and header close controls; Duo canvas host and topmost rail dismissal; existing dialog consumers retain their mapped surface ownership)
+
 Status: `Partial / coexisting`
 
-- `frontend/ui/controls.jsx`
+The shared React Native `TextField` keeps its large fixed-height input vertically centered without imposing a line-height; legacy browser fields remain owned by `controls.jsx` and CSS.
+
+PR #1878: `Modal.web.jsx` closes open dialogs on Escape while the native implementation remains platform-owned. Universal tooltips provide the tooltip role, and provider credential dialogs expose their accessible name. Shared catalog pin state uses `aria-pressed`; `FeatureList` distinguishes its text body for stable geometry checks.
+
+- `frontend/ui/controls`
 - `frontend/ui/controls.css`
 - `src/static/css/libraries/select2-4.1.0.min.css`
 - `src/static/js/i18n/de.js`
@@ -115,7 +125,7 @@ Status: `Legacy`
 
 Status: `Web Migrated`
 
-Shared `Spinner` lives in `frontend/ui/controls.jsx` and `controls.css` (FORM-CONTROLS); its consumer templates are mapped under their own families.
+Shared `Spinner` lives in `frontend/ui/controls` and `controls.css` (FORM-CONTROLS); its consumer templates are mapped under their own families.
 
 - `frontend/ui/mountSpinner.jsx`
 - `src/templates/users/components/spinner.html`
@@ -126,7 +136,7 @@ Shared `Spinner` lives in `frontend/ui/controls.jsx` and `controls.css` (FORM-CO
 
 Status: `Partial / coexisting`
 
-Shared `Badge` lives in `frontend/ui/controls.jsx` and `controls.css` (FORM-CONTROLS); its consumer templates are mapped under their own families.
+Shared `Badge` lives in `frontend/ui/controls` and `controls.css` (FORM-CONTROLS); its consumer templates are mapped under their own families.
 
 - `frontend/ui/mountBadge.jsx`
 - `src/templates/users/components/badge.html`
@@ -137,7 +147,7 @@ Shared `Badge` lives in `frontend/ui/controls.jsx` and `controls.css` (FORM-CONT
 
 Status: `Partial / coexisting`
 
-Shared `Button` lives in `frontend/ui/controls.jsx` and `controls.css` (FORM-CONTROLS); its consumer templates are mapped under their own families.
+Shared `Button` lives in `frontend/ui/controls` and `controls.css` (FORM-CONTROLS); its consumer templates are mapped under their own families.
 
 - `frontend/ui/mountButton.jsx`
 - `src/templates/users/components/button.html`
@@ -170,7 +180,7 @@ Status: `Web Migrated`
 
 - `src/templates/app/components/card_lines.html`
 - `src/templates/app/components/media_card.html` (shell: wrapper classes, props script and first-paint poster and title; React replaces it on mount)
-- `frontend/ui/MediaCard.jsx`, `frontend/ui/mountMediaCard.jsx`, `frontend/ui/media-card.css`, `src/app/media_card_model.py`, `src/app/card_surfaces.py` (the whole card is React on every surface: body, status chip, rating, hover buttons, popups host, touch reveal and bulk-select checkbox)
+- `frontend/ui/MediaCard.jsx`, `frontend/ui/MediaCard.web.jsx`, `frontend/ui/mediaCardBehavior.js`, `frontend/ui/statusChipIcons.js`, `frontend/ui/mountMediaCard.jsx`, `frontend/ui/media-card.css`, `frontend/ui/CardScrim.jsx`, `frontend/ui/CardScrim.native.jsx`, `frontend/ui/CardScrim.web.jsx`, `src/app/media_card_model.py`, `src/app/card_surfaces.py` (React Native primitives on native surfaces; native poster action reveal follows server `actions.clickable`; native scrim uses an SVG gradient; the browser adapter retains DOM links, htmx integration and web-only slots; compact Up Next cards use the localized short label)
 - `src/templates/app/components/media_card_list.html`
 - `src/templates/app/components/media_card_status_chip.html` (out-of-band save fragment only; no card renders it)
 
@@ -178,8 +188,8 @@ Status: `Web Migrated`
 
 Status: `Partial / coexisting`
 
-- `frontend/ui/ModalHost.jsx`, `frontend/ui/mountModalHost.jsx` (shared popup host, mounted once from `base.html`; the card hover buttons and the Add-to-lists buttons open it through `floppy-open-modal`; the Track body is still the server form, see the register)
-- `frontend/ui/ListsForm.jsx`
+- `frontend/ui/ModalHost.web.jsx`, `frontend/ui/mountModalHost.jsx` (shared popup host, mounted once from `base.html`; the card hover buttons and the Add-to-lists buttons open it through `floppy-open-modal`; the Track body is still the server form, see the register; unmounting a host disposes the React islands inside it, so the Track dialog is not stranded when Escape closes the popup mid-load)
+- `frontend/ui/ListsFormView.jsx`
 - `frontend/ui/modal-forms.css`
 
 ## RATING
@@ -204,7 +214,15 @@ Status: `Partial / coexisting`
 
 ## LIBRARY
 
-Status: `Legacy`
+Status: `Partial / coexisting`
+
+- `native-proof/app/screens/LibraryScreen.jsx`
+- `native-proof/app/surfaces/LibraryGrid.jsx`
+- `native-proof/app/surfaces/LibraryBulkActions.jsx`
+- `native-proof/app/data/libraryTransport.js`
+- `native-proof/app/data/libraryTransportCore.js`
+- `src/api/fork_views_library.py`
+- `src/api/fork_views_lists.py`
 
 - `src/templates/app/components/_release_year_fetch_js.html`
 - `src/templates/app/components/game_grouped_items.html`
@@ -223,10 +241,15 @@ Status: `Web Migrated`
 - `frontend/ui/alphabet.css`
 - `src/templates/app/components/alphabet_filter.html`
 - `src/templates/app/components/alphabet_results_empty.html`
-
+- `frontend/ui/AlphabetBar.web.jsx`
+- `frontend/ui/AlphabetBar.native.jsx`
 ## FILTERS
 
-Status: `Legacy`
+Status: `Partial / coexisting`
+
+- `frontend/ui/FilterBar.jsx`
+- `native-proof/app/screens/LibraryScreen.jsx`
+- `native-proof/app/data/libraryTransportCore.js`
 
 - `src/static/js/libraryFilterState.js`
 - `src/static/js/savedViews.js`
@@ -239,7 +262,11 @@ Status: `Legacy`
 
 ## TABLES
 
-Status: `Legacy`
+Status: `Partial / coexisting`
+
+- `frontend/ui/MediaTable.jsx`
+- `native-proof/app/screens/LibraryScreen.jsx`
+- `native-proof/app/surfaces/TableSlot.jsx`
 
 - `src/templates/app/components/cells/album_artist_cell.html`
 - `src/templates/app/components/cells/album_date_added_cell.html`
@@ -291,17 +318,25 @@ Status: `Legacy`
 
 Status: `Partial / coexisting`
 
+- `frontend/ui/BulkActions.jsx`
+- `native-proof/app/surfaces/LibraryBulkActions.jsx`
+- `native-proof/app/data/libraryTransportCore.js`
+
 - `src/static/js/bulkSelection.js`
 - `src/templates/app/components/bulk_selection_toolbar.html`
 - `src/templates/lists/components/bulk_select_button.html`
 - `frontend/ui/mountBulkToolbar.jsx`
 - `frontend/ui/mountBulkActions.jsx` (mounted once from `base.html` for signed-in users; the job dock)
-- `src/app/bulk_action_views.py`, `src/app/services/bulk_show_plays.py` (endpoints and the Add Plays job; the shared `ActionMenu` lives in `frontend/ui/controls.jsx`)
+- `src/app/bulk_action_views.py`, `src/app/services/bulk_show_plays.py` (endpoints and the Add Plays job; the shared `ActionMenu` lives in `frontend/ui/controls`)
 
 ## SEARCH
 
+- `src/templates/app/icons/magnifying-glass.svg` (connected SVG shared by GlobalSearch, CollectionBrowser, ProviderDirectoryView and remaining server-template search controls; shared SearchIcon is mapped under SHELL)
+
 Status: `Partial / coexisting`
 
+- `native-proof/app/surfaces/SearchSlot.jsx` (Expo search transport, scanner and iOS focus presentation; suggestion identity and destination are retained when opening detail; the shared `GlobalSearch` is mapped under SHELL)
+- `src/app/search_views.py` (`_all_scope_barcode_groups`: All-scope ISBN fan-out and saved Barcode matches)
 - `src/static/js/barcode-scanner.js`
 - `src/static/js/barcode-scanner.selfcheck.mjs`
 - `src/static/js/libraries/zxing-library-0.21.3.min.js`
@@ -321,22 +356,27 @@ Status: `Legacy`
 - `src/static/js/horizontal-scroll.js`
 - `src/static/js/horizontal-scroll.selfcheck.mjs`
 - `src/templates/app/components/_scrollable_row.html`
-- `src/templates/app/components/_scrollable_row_js.html`
 
 ## HOME
 
-Status: `Legacy`
+Status: `Partial / coexisting`
 
 - `src/templates/app/components/home_artwork_poller.html`
 - `src/templates/app/components/home_deferred_groups.html`
 - `src/templates/app/components/home_grid.html`
 - `src/templates/app/components/home_groups.html`
 - `src/templates/app/home.html`
+- Web parity pass against v26.10.29: `frontend/pages/HomeView.jsx` forwards `renderCard` and `renderProgress`; `frontend/ui/HomeShelves.jsx` and `frontend/ui/Rail.jsx` size video and mixed rows per item.
+- Home row title links (#1899): `frontend/ui/HomeShelves.jsx` (`onOpenRowTitle`, `canOpenRowTitle`), `frontend/ui/mountHome.jsx`, `native-proof/app/screens/HomeScreen.jsx`, `native-proof/app/screens/LibraryScreen.jsx` (`filtersFromQuery`, `params.query`) and `native-proof/app/data/homeRowDestinationCore.js`.
 
 ## PLAYBACK
 
-Status: `Legacy`
+Status: `Partial / coexisting`
 
+- `frontend/ui/PlaybackCard.jsx`, `frontend/ui/PlaybackTheme.web.jsx`, `frontend/ui/mountPlaybackCard.jsx` (shared presentation, browser adapter and server-fragment fallback; Now Playing renders a 16:9 MediaCard with its section heading and controls above it, using the standard MediaCard indigo for both playing and paused/stale progress fills)
+- `native-proof/app/surfaces/PlaybackSlot.jsx`, `native-proof/app/data/playbackTransport.js`, `native-proof/app/data/settingsTransport.js`, `frontend/ui/mediaCardSizing.js` (native Now Playing follows the server's web detail destination; cards span up to three 110 pt cards plus two 16 pt gaps on compact mobile, two 168 pt cards plus a 12 pt gap on comfortable mobile, and two on desktop; narrow layouts shrink to fit)
+- `src/api/fork_views_playback.py` (`/api/v1/playback/home-cards/`, session-only cards and server-resolved Pause/Stop or Stop/Cancel actions)
+- `src/templates/app/components/_scrollable_row_js.html` (browser playback width measures an ordinary Home media-grid card and spans three on compact mobile, two on comfortable mobile, or two on desktop)
 - `src/templates/app/components/active_playback_card.html`
 - `src/templates/app/components/detail_checkin_state.html`
 - `src/templates/app/components/active_playback_cards.html`
@@ -353,7 +393,7 @@ Status: `Legacy`
 
 ## DETAIL
 
-Status: `Legacy`
+Status: `Partial / coexisting` — Expo uses the shared detail composition; the browser page remains server-owned.
 
 - `src/templates/app/components/detail_action_buttons.html`
 - `src/templates/app/components/detail_activity_subtitle.html`
@@ -368,10 +408,17 @@ Status: `Legacy`
 - `src/templates/app/components/trakt_series_graph_fragment.html`
 - `src/templates/app/components/video_details_extra.html`
 - `src/templates/app/media_details.html`
+- `native-proof/app/screens/DetailScreen.jsx`
+- `native-proof/app/surfaces/DetailSlot.jsx`
+- `native-proof/app/surfaces/detailIdentity.mjs`
+- `src/api/fork_views_detail.py`
+- `src/api/fork_urls.py`
+- `frontend/pages/DetailView.jsx`
+- `frontend/ui/DetailComposition.jsx`
 
 ## CHILDREN
 
-Status: `Legacy`
+Status: `Partial / coexisting` — browser rows remain server-owned; Expo renders the shared child composition.
 
 - `src/templates/app/comic_issue_details.html`
 - `src/templates/app/components/_episode_scroll_restore.html`
@@ -386,6 +433,7 @@ Status: `Legacy`
 - `src/templates/app/components/issue_row.html`
 - `src/templates/app/components/seasons_grid.html`
 - `src/templates/app/episode_details.html`
+- `frontend/ui/DetailChildren.jsx`
 
 ## TRACKING
 
@@ -415,13 +463,13 @@ Status: `Legacy`
 - `src/static/js/dateTimePicker.js`
 - `src/templates/app/components/calendar.html`
 - `src/templates/app/components/date_time_picker.html`
+- `src/templates/app/components/date_time_picker_props.html`
 
 ## NOTES
 
 Status: `Legacy`
 
 - `src/static/js/libraries/marked-12.0.2.min.js`
-- `src/static/js/markdown-editor.js`
 - `src/templates/app/components/detail_notes_block.html`
 - `src/templates/app/components/markdown_notes.html`
 - `src/templates/app/components/music_track_notes.html`
@@ -470,7 +518,9 @@ Status: `Legacy`
 
 ## MUSIC
 
-Status: `Legacy`
+Status: `Partial / coexisting`
+
+The artist relation and album grids are React islands over server-rendered fallbacks (`MusicRelationCard`, `MusicAlbumCard`, `mountMusicRelations`, `mountMusicAlbums`). Album/track details, podcast pages and episode rows remain server-owned or Alpine; retire each remaining group when its component migration preserves the existing fallback and behavior.
 
 - `src/templates/app/components/album_grid.html`
 - `src/templates/app/components/album_list_grid_items.html`
@@ -486,9 +536,22 @@ Status: `Legacy`
 - `src/templates/app/components/detail_music_track_actions.html`
 - `src/templates/app/components/detail_music_track_button.html`
 - `src/templates/app/components/detail_music_track_history_line.html`
-- `src/templates/app/components/podcast_episode_list.html`
+- `src/templates/app/components/podcast_episode_list.html` (optional episode description and empty state)
 - `src/templates/app/music_album_detail.html`
 - `src/templates/app/podcast_show_detail.html`
+- `frontend/pages/MusicView.jsx`
+- `frontend/ui/MusicAlbumCard.jsx`
+- `frontend/ui/MusicRelationCard.jsx`
+- `frontend/ui/mountMusicAlbums.jsx`
+- `frontend/ui/mountMusicRelations.jsx`
+
+## PODCAST-EPISODES
+
+Status: `Partial / coexisting`
+
+- `frontend/ui/PodcastEpisodeManager.jsx`
+- `frontend/ui/mountPodcastEpisodeManager.jsx`
+- `src/templates/app/podcast_episodes_manage.html`
 
 ## PEOPLE
 
@@ -529,9 +592,10 @@ Status: `Legacy`
 
 ## DETAIL-RELATED
 
-Status: `Legacy`
+Status: `Partial / coexisting` — Expo uses shared related cards; browser section chrome and Steam DLC cards remain server-owned.
 
-- `src/templates/app/components/detail_secondary_content.html` (related and DLC sections, plus the Book "Format" and "Narrator" facts)
+- `src/templates/app/components/detail_secondary_content.html` (related and DLC sections, the Book "Format" and "Narrator" facts, and the manual podcast manager trigger)
+- `frontend/ui/DetailRelated.jsx`
 
 ## HISTORY
 
@@ -577,6 +641,7 @@ Status: `Legacy`
 - `src/templates/app/components/taste_signals_genres.html`
 - `src/templates/app/statistics.html`
 - `src/templates/app/components/reading_consumption_section.html` (Books "Listening Time" card)
+- Web parity pass against v26.10.29: `frontend/ui/StatisticsSummary.jsx` caps the summary card text block at the card width.
 
 ## RELEASE-CALENDAR
 
@@ -585,7 +650,7 @@ Status: `Partial / coexisting`
 - `src/templates/events/calendar.html`
 - `src/templates/events/components/calendar_grid.html`
 - `src/templates/events/components/calendar_list.html`
-- `frontend/ui/mountCalendarMenu.jsx`
+- `frontend/ui/mountCalendarLinks.jsx`
 
 ## LISTS
 
@@ -660,10 +725,11 @@ Status: `Legacy`
 
 ## SET-CARDS
 
-Status: `Legacy`
+Status: `Partial / coexisting`
 
 - `src/templates/users/cards.html`
 - `src/templates/users/cards_preview.html`
+- `frontend/pages/SettingsCardsView.jsx`, `frontend/settings/CardsEditor.jsx`, `native-proof/app/surfaces/CardsSettingsSlot.jsx`, `native-proof/app/data/settingsTransport.js` (native touch action setting uses the account preference API; per-type native profiles remain local demo state)
 
 ## SET-HOME
 
@@ -675,17 +741,17 @@ Status: `Legacy`
 
 Status: `Partial / coexisting`
 
-- `frontend/providers/AccountConnection.jsx`
-- `frontend/providers/Activity.jsx`
-- `frontend/providers/Connection.jsx`
-- `frontend/providers/Directory.jsx`
-- `frontend/providers/Import.jsx`
-- `frontend/providers/ImportPreferences.jsx`
-- `frontend/providers/Metadata.jsx`
-- `frontend/providers/ProviderPage.jsx`
+- `frontend/providers/mountAccountConnection.jsx`
+- `frontend/providers/ProviderActivityView.jsx`
+- `frontend/providers/ConnectionSettings.jsx`
+- `frontend/providers/ProviderDirectoryView.jsx`
+- `frontend/providers/ImportSettings.jsx`
+- `frontend/providers/mountImportPreferences.jsx`
+- `frontend/providers/ProviderMetadataView.jsx`
+- `frontend/providers/ProviderPageView.jsx`
 - `frontend/providers/mount.jsx`
 - `frontend/providers/provider-page.css`
-- `frontend/providers/web.jsx`
+- `frontend/providers/transport.web.js`
 - `src/templates/users/providers/overview_fallback.html`
 - `src/templates/users/providers/header_fallback.html`
 - `src/templates/users/providers/content_legacy.html`
@@ -723,11 +789,25 @@ Status: `Partial / coexisting`
 
 Status: `Partial / coexisting`
 
-- `frontend/providers/FileImport.jsx`
-- `frontend/providers/Credentials.jsx`
-- `frontend/providers/SetupGuide.jsx`
-- `frontend/providers/SettingsForm.jsx`
-- `src/users/provider_guides.py`
+PR #1878: Provider overview outline/focus and linked chip decoration are styled by universal React Native presentation; browser tests wait for current search-result overlays and mounted sidebar links instead of retired DOM wrappers.
+
+PR #1878: Shared statistics presentation exposes stable RN Web test IDs for total labels, summary values, and status legend/ring geometry. Browser tests retain their substantive UI assertions across the native migration.
+
+PR #1878: The file-import web adapter listens for preference changes on the shared page boundary, covering sibling islands with or without Alpine while retaining the universal file-picker presentation.
+
+PR #1878: CLZ preference changes mirror their live values into fallback POST inputs regardless of Alpine ancestry. App tracking browser tests submit through the shared search island instead of a retired form.
+
+PR #1878: The registered browser island loader discovers sidebar, global search, track form and statistics hosts consistently with its renderer dispatch list, restoring universal search mounting in browser workflows.
+
+PR #1878: Provider overview, credential key, and import website hyperlinks receive DOM-only URL attributes from the browser mounts, while their universal JSX remains native-compatible.
+
+PR #1878: The browser file-import mount now supplies a DOM chooser to the universal picker. Chosen `File` objects flow through the existing form transport; the server fallback remains active when the lazy module is blocked, reflects current preferences, and exposes semantic provider website links.
+
+- `frontend/providers/ProviderFileImportView.jsx`
+- `frontend/providers/mountCredentials.jsx`
+- `frontend/providers/mountSetupGuide.jsx`
+- `frontend/providers/ProviderSettingsFormView.jsx`
+- `src/users/provider_guides.py` (includes the Jellyfin KefinTweaks rating-flag warning)
 - `src/users/provider_forms.py`
 - `src/templates/users/providers/setup_guide.html`
 - `src/templates/users/providers/setup_guide_parts.html`
@@ -807,7 +887,9 @@ Status: `Legacy`
 
 ## AUTH
 
-Status: `Legacy`
+Status: `Partial / coexisting`
+
+Native `AuthEntrance` separates server selection from credentials, keeps manual entry, changes its suggested address with Local/Remote mode, and explains briefly that discovery is unavailable in Expo Go; browser authentication remains server-rendered.
 
 - `src/templates/account/login.html`
 - `src/templates/account/messages/logged_in.txt`
@@ -833,6 +915,12 @@ Status: `Legacy`
 - `src/templates/socialaccount/snippets/provider_list.html`
 - `src/templates/users/account.html`
 - `src/templates/users/password_recover.html`
+- `frontend/auth/AuthEntrance.jsx`
+- `native-proof/app/screens/AuthScreen.jsx`
+- `native-proof/app/data/serverDiscovery.native.js`
+- `native-proof/app/data/serverDiscovery.web.js`
+- `native-proof/app/data/serverDiscoveryCore.js`
+- `native-proof/app/data/authTransportCore.js`
 
 ## SET-NOTIFICATIONS
 
@@ -846,7 +934,6 @@ Status: `Legacy`
 
 Status: `Legacy`
 
-- `src/templates/users/components/onboarding_banner.html`
 - `src/templates/users/onboarding/_layout.html`
 - `src/templates/users/onboarding/components/connect_form.html`
 - `src/templates/users/onboarding/components/connect_oauth.html`
@@ -897,3 +984,280 @@ Status: `Legacy`
 Status: `Legacy`
 
 - `src/templates/integrations/stremio_configure.html`
+
+## MIGRATION
+
+Status: `Partial / coexisting`
+
+PR #1878: the Track dialog adapter (`mountTrackForm.jsx`) posts its payload, mirrors the card's Alpine open flag when it has no legacy modal root, and `mediaCardForms.js` passes date shortcuts and runtime through to `TrackForm.jsx`; shared status options set `aria-checked`.
+
+Track dialog layout restore: `TrackForm.jsx`, `TrackFormTabs.jsx`, `SelectField.jsx`, `DateTimePicker.jsx`, `TagManagement.jsx` and `CollectionCopies.jsx` render the v26.10.29 layout (title bar, icon sidebar, two-column General grid, dropdown selects, date chips, Delete / Update footer) from the shared React form. Browser verified; iOS and Android not verified.
+
+- `frontend/auth/AccountSecurity.jsx`
+- `frontend/discover/DiscoverScreen.jsx`
+- `frontend/discover/mountDiscover.jsx`
+- `frontend/errors/ApiDocs.jsx`
+- `frontend/errors/ErrorRecovery.jsx`
+- `frontend/errors/ErrorReportPanel.jsx`
+- `frontend/errors/ErrorReportPanel.native.jsx`
+- `frontend/errors/ErrorReportPanel.web.jsx`
+- `frontend/errors/mountErrorRecovery.jsx`
+- `frontend/onboarding/OnboardingWizard.jsx`
+- `frontend/pages/AuthView.jsx`
+- `frontend/pages/CalendarView.jsx`
+- `frontend/pages/CollectionView.jsx`
+- `frontend/pages/DiscoverView.jsx`
+- `frontend/pages/ErrorsView.jsx`
+- `frontend/pages/HistoryView.jsx`
+- `frontend/pages/HomeView.jsx`
+- `frontend/pages/LibraryPageView.jsx`
+- `frontend/pages/ListDetailPageView.jsx`
+- `frontend/pages/ListsPageView.jsx`
+- `frontend/pages/OnboardingView.jsx`
+- `frontend/pages/PageChrome.jsx`
+- `frontend/pages/PeopleView.jsx`
+- `frontend/pages/ProvidersView.jsx`
+- `frontend/pages/SearchPageView.jsx`
+- `frontend/pages/SettingsAboutView.jsx`
+- `frontend/pages/SettingsAccessView.jsx`
+- `frontend/pages/SettingsAccountView.jsx`
+- `frontend/pages/SettingsAdvancedView.jsx`
+- `frontend/pages/SettingsAppearanceView.jsx`
+- `frontend/pages/SettingsDataView.jsx`
+- `frontend/pages/SettingsHomeScreenView.jsx`
+- `frontend/pages/SettingsNavLink.jsx`
+- `frontend/pages/SettingsNavLink.web.jsx`
+- `frontend/pages/SettingsNotificationsView.jsx`
+- `frontend/pages/SettingsPreferencesView.jsx`
+- `frontend/pages/SettingsUsersView.jsx`
+- `frontend/pages/SettingsView.jsx`
+- `frontend/pages/StatisticsView.jsx`
+- `frontend/pages/TagsPageView.jsx`
+- `frontend/pages/UtilitiesView.jsx`
+- `frontend/pages/registry.js`
+- `frontend/providers/AccountSettings.jsx`
+- `frontend/providers/ProviderContext.jsx`
+- `frontend/providers/ProviderSettingsView.jsx`
+- `frontend/providers/mountAccountImportAction.jsx`
+- `frontend/providers/mountDirectory.jsx`
+- `frontend/providers/mountFileImport.jsx`
+- `frontend/providers/mountSettingsForm.jsx`
+- `frontend/settings/AboutSettings.jsx`
+- `frontend/settings/AccessSettings.jsx`
+- `frontend/settings/AdvancedSettings.jsx`
+- `frontend/settings/AppearanceEditor.jsx`
+- `frontend/settings/Chip.web.jsx`
+- `frontend/settings/ConfirmDialog.jsx`
+- `frontend/settings/DataSettings.jsx`
+- `frontend/settings/HomeScreenEditor.jsx`
+- `frontend/settings/NotificationSettings.jsx`
+- `frontend/settings/island-reveal.css` (the sidebar root is excluded from the hide rule; see the Shell navigation entry in the component register)
+- `frontend/settings/mountAbout.jsx`
+- `frontend/settings/mountAdvanced.jsx`
+- `frontend/settings/mountBackupStatus.jsx`
+- `frontend/settings/mountSettingsView.jsx`
+- `frontend/ui/ArtworkImage.jsx`
+- `frontend/ui/ArtworkImage.native.jsx`
+- `frontend/ui/ArtworkImage.web.jsx`
+- `frontend/ui/ArtworkPicker.jsx`
+- `frontend/ui/ArtworkPicker.web.jsx`
+- `frontend/ui/Badge.jsx`
+- `frontend/ui/BadgeTheme.web.jsx`
+- `frontend/ui/BulkActionBar.native.jsx`
+- `frontend/ui/BulkActionBar.web.jsx`
+- `frontend/ui/BulkEpisodeForm.jsx`
+- `frontend/ui/BulkJobDock.native.jsx`
+- `frontend/ui/BulkJobDock.web.jsx`
+- `frontend/ui/Button.jsx`
+- `frontend/ui/Button.native.jsx`
+- `frontend/ui/Button.web.jsx`
+- `frontend/ui/CacheStatusCard.jsx`
+- `frontend/ui/CalendarLinks.jsx`
+- `frontend/ui/CollectionBrowser.jsx`
+- `frontend/ui/CollectionCopies.jsx`
+- `frontend/ui/CollectionCustomFields.jsx`
+- `frontend/ui/ColumnMenu.jsx`
+- `frontend/ui/CopyBlock.jsx`
+- `frontend/ui/CopyField.jsx`
+- `frontend/ui/DateTimePicker.jsx`
+- `frontend/ui/DetailChildrenTheme.web.jsx`
+- `frontend/ui/DetailCompositionTheme.native.jsx`
+- `frontend/ui/DetailCompositionTheme.web.jsx`
+- `frontend/ui/DetailRelatedTheme.native.jsx`
+- `frontend/ui/DetailRelatedTheme.web.jsx`
+- `frontend/ui/DeviceConnect.jsx`
+- `frontend/ui/FormSaveBar.jsx`
+- `frontend/ui/GlobalSearch.web.jsx`
+- `frontend/ui/HistoryFeed.jsx`
+- `frontend/ui/HistoryFeed.native.jsx`
+- `frontend/ui/HistoryFeed.web.jsx`
+- `frontend/ui/HomeShelves.jsx` (shared browser and native Home shelf rows; compact phone cards are 110 pt wide)
+- `frontend/ui/fetchGate.js` (pure async concurrency gate: Home loads at most three rows at a time on web and native)
+- `frontend/ui/IconRenderer.native.jsx`
+- `frontend/ui/IconRenderer.web.jsx`
+- `frontend/ui/InstallPromptCard.jsx`
+- `frontend/ui/IntegrationPanels.jsx`
+- `frontend/ui/ListCard.jsx`
+- `frontend/ui/ListFormView.jsx`
+- `frontend/ui/ListHeader.jsx`
+- `frontend/ui/ListMembership.jsx`
+- `frontend/ui/ListRecommendationsView.jsx`
+- `frontend/ui/ListResults.jsx`
+- `frontend/ui/ListSearchView.jsx`
+- `frontend/ui/ListsForm.native.jsx`
+- `frontend/ui/ListsForm.web.jsx`
+- `frontend/ui/MarkdownNotes.jsx`
+- `frontend/ui/MarkdownPreview.native.jsx`
+- `frontend/ui/MarkdownPreview.web.jsx`
+- `frontend/ui/MediaCard.native.jsx`
+- `frontend/ui/MediaCardActionHost.jsx`
+- `frontend/ui/MediaCardActions.jsx`
+- `frontend/ui/MediaCardFormControls.jsx`
+- `frontend/ui/MetadataReview.jsx`
+- `frontend/ui/ModalHost.native.jsx`
+- `frontend/ui/PageSlot.web.jsx`
+- `frontend/ui/ParentPicker.jsx`
+- `frontend/ui/ParentPicker.web.jsx`
+- `frontend/ui/People.jsx`
+- `frontend/ui/PreferencesForm.jsx`
+- `frontend/ui/ProgressBar.jsx`
+- `frontend/ui/ProgressBreakdown.jsx`
+- `frontend/ui/ProgressBreakdownTheme.web.jsx`
+- `frontend/ui/ProgressCard.jsx`
+- `frontend/ui/ProgressCard.native.jsx`
+- `frontend/ui/ProgressCard.web.jsx`
+- `frontend/ui/ProgressChanger.jsx`
+- `frontend/ui/ProgressChangerTheme.web.jsx`
+- `frontend/ui/ProgressDetailTheme.web.jsx`
+- `frontend/ui/ProgressDialog.jsx`
+- `frontend/ui/Rail.jsx`
+- `frontend/ui/Rail.web.jsx`
+- `frontend/ui/RatingChip.jsx`
+- `frontend/ui/RatingStarIcon.native.jsx`
+- `frontend/ui/RatingStarIcon.web.jsx`
+- `frontend/ui/RefreshNotice.jsx`
+- `frontend/ui/ReleaseCalendar.jsx` (calendar filter/menu dialogs: uniform floating corners; compact bottom-sheet corners preserved)
+- `frontend/ui/Reveal.jsx`
+- `frontend/ui/Reveal.native.jsx`
+- `frontend/ui/Reveal.web.jsx`
+- `frontend/ui/SearchResultCard.jsx`
+- `frontend/ui/SearchResultCard.native.jsx`
+- `frontend/ui/SearchResultCard.web.jsx`
+- `frontend/ui/SearchResults.jsx`
+- `native-proof/app/data/useMobileGridLayout.js`
+- `frontend/ui/SearchResults.web.jsx`
+- `frontend/ui/searchRows.js`
+- `frontend/ui/shelfWidth.web.js`
+- `frontend/ui/keyboardOverlap.web.js`
+- `native-proof/app/data/useKeyboardOverlap.js`
+- `native-proof/app/surfaces/WindowedRail.jsx`
+- `frontend/ui/SelectField.jsx`
+- `frontend/ui/SetupGuide.jsx`
+- `frontend/ui/Shell.jsx`
+- `frontend/ui/SmartRules.jsx`
+- `frontend/ui/Spinner.jsx`
+- `frontend/ui/SpinnerTheme.web.jsx`
+- `frontend/ui/StatisticsCharts.jsx`
+- `frontend/ui/StatisticsSections.jsx`
+- `frontend/ui/StatisticsSummary.jsx`
+- `frontend/ui/StremioConfigurator.jsx`
+- `frontend/ui/TagManagement.jsx`
+- `frontend/ui/TextField.jsx`
+- `frontend/ui/TierBoard.jsx`
+- `frontend/ui/ToggleChip.jsx`
+- `frontend/ui/TrackDialog.jsx`
+- `frontend/ui/TrackForm.jsx`
+- `frontend/ui/TrackFormTabs.jsx`
+- `frontend/ui/barcodeEntry.native.js`
+- `frontend/ui/barcodeEntry.web.js`
+- `frontend/ui/clipboard.native.js`
+- `frontend/ui/clipboard.web.js`
+- `frontend/ui/controls/ActivityList.jsx`
+- `frontend/ui/controls/Catalog.jsx`
+- `frontend/ui/controls/ComboField.jsx`
+- `frontend/ui/controls/Dialog.jsx`
+- `frontend/ui/controls/FeatureList.jsx`
+- `frontend/ui/controls/FilePicker.jsx`
+- `frontend/ui/controls/FilePicker.native.jsx`
+- `frontend/ui/controls/FilePicker.web.jsx`
+- `frontend/ui/controls/Form.jsx`
+- `frontend/ui/controls/Menu.jsx`
+- `frontend/ui/controls/Navigation.jsx`
+- `frontend/ui/controls/Tooltip.jsx`
+- `frontend/ui/dateTime.js`
+- `frontend/ui/installPrompt.native.js`
+- `frontend/ui/installPrompt.web.js`
+- `frontend/ui/markdown.js`
+- `frontend/ui/mediaCardForms.js`
+- `frontend/ui/mountArtworkPicker.jsx`
+- `frontend/ui/mountBulkEpisodeForm.jsx`
+- `frontend/ui/mountCacheStatus.jsx`
+- `frontend/ui/mountCheckInState.jsx`
+- `frontend/ui/mountCollectionBrowser.jsx`
+- `frontend/ui/mountCollectionCopyFields.jsx`
+- `frontend/ui/mountCollectionFields.jsx`
+- `frontend/ui/mountCopyField.jsx`
+- `frontend/ui/mountDateTimePicker.jsx`
+- `frontend/ui/mountDetailChildren.jsx`
+- `frontend/ui/mountDetailComposition.jsx`
+- `frontend/ui/mountDetailRelated.jsx`
+- `frontend/ui/mountDeviceConnect.jsx`
+- `frontend/ui/mountEditionPicker.jsx`
+- `frontend/ui/mountFilterBar.jsx`
+- `frontend/ui/mountHistoryFeed.jsx`
+- `frontend/ui/mountHome.jsx`
+- `frontend/ui/mountLibraryPage.jsx`
+- `frontend/ui/mountListDetailPage.jsx`
+- `frontend/ui/mountListsPage.jsx`
+- `frontend/ui/mountMarkdownIslands.jsx`
+- `frontend/ui/mountMediaTable.jsx`
+- `frontend/ui/mountMetadataReview.jsx`
+- `frontend/ui/mountParentPicker.jsx`
+- `frontend/ui/mountPeople.jsx`
+- `frontend/ui/mountProgressBreakdown.jsx`
+- `frontend/ui/mountProgressChanger.jsx`
+- `frontend/ui/mountProgressDetail.jsx`
+- `frontend/ui/mountRails.jsx`
+- `frontend/ui/mountRatingChip.jsx`
+- `frontend/ui/mountReleaseCalendar.jsx`
+- `frontend/ui/mountSearchResults.jsx`
+- `frontend/ui/mountShell.jsx`
+- `frontend/ui/mountStatisticsCharts.jsx`
+- `frontend/ui/mountStatisticsSections.jsx`
+- `frontend/ui/mountStatisticsSummary.jsx`
+- `frontend/ui/mountStremioConfig.jsx`
+- `frontend/ui/mountTags.jsx`
+- `frontend/ui/mountTrackForm.jsx`
+- `frontend/ui/people-parity.css`
+- `frontend/ui/serviceWorkerStatus.native.js`
+- `frontend/ui/serviceWorkerStatus.web.js`
+- `frontend/ui/statistics-fallback.css`
+- `frontend/users/UsersManagement.jsx`
+- `src/static/js/searchParentFallback.js`
+- `src/templates/app/components/date_time_picker_legacy.html`
+- `src/templates/app/components/date_time_picker_react.html`
+- `src/templates/app/components/detail_composition.html`
+- `src/templates/app/components/detail_related.html`
+- `src/templates/app/components/edition_picker.html`
+- `src/templates/app/components/filter_bar.html`
+- `src/templates/app/components/people_hero.html`
+- `src/templates/app/components/people_island.html`
+- `src/templates/app/components/rating_chip.html`
+- `src/templates/users/components/progress_changer.html`
+- `src/templates/users/manage_users.html`
+
+## PAGE
+
+Status: `Partial / coexisting`
+
+## SET-USERS
+
+Status: `Partial / coexisting`
+
+## BULK_ACTIONS
+
+Status: `Partial / coexisting`
+
+## CONTROL-KIT
+
+Status: `Partial / coexisting`

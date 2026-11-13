@@ -42,8 +42,8 @@ SCOPE_DESCRIPTIONS = {
     "exports:read": "Download exports.",
     "sync:read": "Read sync connections, change feeds, and conflicts.",
     "sync:write": "Resolve sync conflicts.",
-    "user:read": "Read preferences, sidebar, and notification settings.",
-    "user:write": "Change preferences, sidebar, and notification settings.",
+    "user:read": "Read preferences, saved views, sidebar, and notification settings.",
+    "user:write": "Change preferences, saved views, sidebar, and notification settings.",
 }
 
 ALL_SCOPES = frozenset(SCOPE_DESCRIPTIONS)
@@ -81,6 +81,9 @@ VIEW_SCOPES: dict[str, dict[str, str]] = {
         "POST": "catalog:write",
     },
     "api.fork_views_discover.HomeView": {"GET": "catalog:read"},
+    "api.fork_views_discover.HomeRowView": {"GET": "catalog:read"},
+    "api.fork_views_discover.HomeRowDirectionView": {"POST": "catalog:write"},
+    "api.fork_views_discover.HomeArtworkView": {"GET": "catalog:read"},
     "api.fork_views_integrations.ImportDispatchView": {"POST": "imports:write"},
     "api.fork_views_integrations.ImportActivityView": {"GET": "imports:read"},
     "api.fork_views_integrations.ExportCsvView": {"GET": "exports:read"},
@@ -95,6 +98,7 @@ VIEW_SCOPES: dict[str, dict[str, str]] = {
         "PUT": "lists:write",
     },
     "api.fork_views_lists.ListItemsReorderView": {"POST": "lists:write"},
+    "api.fork_views_lists.ListItemsBulkAddView": {"POST": "lists:write"},
     "api.fork_views_lists.ListItemsOrderView": {"PUT": "lists:write"},
     "api.fork_views_lists.ListItemsRanksView": {"PUT": "lists:write"},
     "api.fork_views_lists.ListRecommendationsView": {
@@ -138,12 +142,22 @@ VIEW_SCOPES: dict[str, dict[str, str]] = {
     "api.fork_views_music.MusicSongPlayView": {"POST": "music:write"},
     "api.fork_views_music.MusicTrackScoreView": {"PATCH": "music:write"},
     "api.fork_views_music.MusicBulkPlaysView": {"POST": "music:write"},
+    "api.fork_views_music.MusicArtistRelationsView": {"GET": "music:read"},
+    "api.fork_views_music.MusicArtistMembersSyncView": {"POST": "music:write"},
+    "api.fork_views_music.MusicAlbumSyncView": {"POST": "music:write"},
+    "api.fork_views_music.MusicTrackNotesView": {"PATCH": "music:write"},
     "api.fork_views_playback.PlaybackProgressView": {
         "GET": "progress:read",
         "PUT": "progress:write",
         "DELETE": "progress:write",
     },
     "api.fork_views_playback.NowPlayingView": {"GET": "progress:read"},
+    # Home playback controls are session-only; scoped integration tokens may
+    # not read the cards or invoke their actions.
+    "api.fork_views_playback.HomePlaybackCardsView": {
+        "GET": NEVER,
+        "POST": NEVER,
+    },
     "api.fork_views_podcast.PodcastShowsView": {
         "GET": "podcasts:read",
         "POST": "podcasts:write",
@@ -157,6 +171,12 @@ VIEW_SCOPES: dict[str, dict[str, str]] = {
     "api.fork_views_podcast.PodcastShowEpisodesView": {"GET": "podcasts:read"},
     "api.fork_views_podcast.PodcastMarkAllPlayedView": {"POST": "podcasts:write"},
     "api.fork_views_podcast.PodcastEpisodePlayView": {"POST": "podcasts:write"},
+    "api.fork_views_podcast.PodcastEpisodePlayDetailView": {
+        "GET": "podcasts:read",
+        "PATCH": "podcasts:write",
+        "DELETE": "podcasts:write",
+    },
+    "api.fork_views_podcast.PodcastEpisodeNotesView": {"PATCH": "podcasts:write"},
     "api.fork_views_scrobble.ScrobbleView": {"POST": "scrobble:write"},
     "api.fork_views_statistics.StatisticsOverviewView": {"GET": "statistics:read"},
     "api.fork_views_statistics.StatisticsRefreshView": {"POST": "statistics:write"},
@@ -185,6 +205,10 @@ VIEW_SCOPES: dict[str, dict[str, str]] = {
     "api.fork_views_watched_state.SyncConnectionsView": {"GET": "sync:read"},
     "api.fork_views_watched_state.SyncConflictsView": {"GET": "sync:read"},
     "api.fork_views_watched_state.SyncConflictResolveView": {"POST": "sync:write"},
+    "api.fork_views_metadata.MediaMetadataView": {"GET": "metadata:read"},
+    "api.fork_views_detail.DetailPageView": {"GET": "watchlist:read"},
+    "api.fork_views_detail.DetailGalleryView": {"GET": "metadata:read"},
+    "api.fork_views_users.UserNavigationView": {"GET": "user:read"},
     "api.fork_views_users.UserPreferencesView": {
         "GET": "user:read",
         "PATCH": "user:write",
@@ -222,6 +246,14 @@ VIEW_SCOPES: dict[str, dict[str, str]] = {
     "api.views.StatisticsView": {"GET": "statistics:read"},
     "api.views.MediaListView": {"GET": _R},
     "api.views.MediaTypeListView": {"GET": _R, "POST": _W},
+    "api.fork_views_library_changes.LibraryActivityView": {"GET": _R},
+    "api.fork_views_library_changes.LibraryDeletedView": {"GET": _R},
+    "api.fork_views_library.LibrarySavedViewsView": {"GET": "user:read", "POST": "user:write"},
+    "api.fork_views_library.LibrarySavedViewDetailView": {"GET": "user:read", "DELETE": "user:write"},
+    "api.fork_views_library.LibrarySavedViewsReorderView": {"POST": "user:write"},
+    "api.fork_views_library.LibraryBulkCollectionView": {"POST": _W},
+    "api.fork_views_library.LibraryBulkPlaysView": {"POST": _W},
+    "api.fork_views_library.LibraryBulkPlaysStatusView": {"GET": _R},
     "api.views.MediaDetailView": {"GET": _R, "PATCH": _W, "DELETE": _W},
     "api.views.MediaSeasonsView": {"GET": _R},
     "api.views.MediaSeasonDetailView": {"GET": _R, "PATCH": _W, "DELETE": _W},

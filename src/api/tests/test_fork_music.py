@@ -15,6 +15,7 @@ from app.models import (
     Status,
     Track,
 )
+from app.models.music import ArtistMember
 
 from .base import FloppyApiTestCase
 
@@ -65,6 +66,22 @@ class ArtistTrackerTests(MusicApiTestCase):
         listed = self.call_api("get", "api_music_artists", headers=self.auth_headers)
         self.assertEqual(listed.status_code, HTTP.OK)
         self.assertEqual(listed.json()["pagination"]["total"], 1)
+
+    def test_artist_list_uses_library_search_status_and_sort_filters(self):
+        ArtistTracker.objects.create(
+            user=self.user1,
+            artist=self.artist,
+            status=Status.COMPLETED.value,
+            score=8,
+        )
+        response = self.client.get(
+            "/api/v1/music/artists/",
+            {"search": "test", "status": Status.COMPLETED.value, "sort": "title", "direction": "asc"},
+            **self.auth_headers,
+        )
+        self.assertEqual(response.status_code, HTTP.OK)
+        self.assertEqual(response.data["pagination"]["total"], 1)
+        self.assertEqual(response.data["results"][0]["name"], "The Testers")
 
     def test_patch_tracker_partial(self):
         """PATCH updates only the provided fields."""
@@ -160,6 +177,17 @@ class AlbumTrackerTests(MusicApiTestCase):
         )
         self.assertEqual(detail.status_code, HTTP.OK)
         self.assertEqual(detail.json()["tracker"]["score"], "9.0")
+
+    def test_album_list_uses_library_search_and_rating_filters(self):
+        AlbumTracker.objects.create(user=self.user1, album=self.album, score=8)
+        response = self.client.get(
+            "/api/v1/music/albums/",
+            {"search": "first", "rating_min": "7", "sort": "release_date", "direction": "desc"},
+            **self.auth_headers,
+        )
+        self.assertEqual(response.status_code, HTTP.OK)
+        self.assertEqual(response.data["pagination"]["total"], 1)
+        self.assertEqual(response.data["results"][0]["title"], "First Album")
 
     def test_tracks_listing_includes_play_state(self):
         """GET tracks lists catalog rows with the user's plays."""
@@ -576,3 +604,127 @@ class SongSaveWebDateTests(MusicApiTestCase):
             music.end_date,
             datetime.datetime(2024, 3, 1, 0, 0, tzinfo=datetime.UTC),
         )
+
+
+class ArtistRelationsApiTests(MusicApiTestCase):
+    """Artist membership relations and member sync."""
+
+    def test_relations_return_members_and_also_in(self):
+        """Membership relations include role, current flag and the caller tracker."""
+        member = Artist.objects.create(name="Session Player")
+        band = Artist.objects.create(name="Other Band")
+        ArtistMember.objects.create(band=self.artist, member=member, role="Vocals")
+        ArtistMember.objects.create(
+            band=band,
+            member=self.artist,
+            role="Guest",
+            is_current=False,
+        )
+        ArtistTracker.objects.create(user=self.user1, artist=member, score=7)
+
+        response = self.call_api(
+            "get",
+            "api_music_artist_relations",
+            args=(self.artist.id,),
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, HTTP.OK)
+        payload = response.json()
+        self.assertEqual(len(payload["members"]), 1)
+        self.assertEqual(payload["members"][0]["name"], "Session Player")
+        self.assertEqual(payload["members"][0]["role"], "Vocals")
+        self.assertTrue(payload["members"][0]["current"])
+        self.assertEqual(payload["members"][0]["tracker"]["score"], "7.0")
+        self.assertEqual(len(payload["also_in"]), 1)
+        self.assertFalse(payload["also_in"][0]["current"])
+
+    @patch("api.fork_views_music.sync_artist_members")
+    def test_sync_members_returns_count(self, mock_sync):
+        """The forced member sync count is returned."""
+        mock_sync.return_value = 3
+        response = self.call_api(
+            "post",
+            "api_music_artist_members_sync",
+            args=(self.artist.id,),
+            payload={},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, HTTP.OK)
+        self.assertEqual(response.json()["synced_members"], 3)
+        mock_sync.assert_called_once_with(self.artist, force=True)
+
+
+class AlbumMetadataSyncApiTests(MusicApiTestCase):
+    """Album metadata sync mirrors the web action."""
+
+    @patch("api.fork_views_music.sync_album_metadata")
+    def test_sync_returns_album_and_track_count(self, mock_sync):
+        """A successful sync reports the album id and rebuilt track count."""
+        mock_sync.return_value = {
+            "album": self.album,
+            "merged_into": None,
+            "synced_tracks": 12,
+            "missing_release": False,
+            "error": None,
+        }
+        response = self.call_api(
+            "post",
+            "api_music_album_sync",
+            args=(self.album.id,),
+            payload={},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, HTTP.OK)
+        self.assertEqual(response.json()["album_id"], self.album.id)
+        self.assertEqual(response.json()["synced_tracks"], 12)
+
+    @patch("api.fork_views_music.sync_album_metadata")
+    def test_sync_failure_is_bad_gateway(self, mock_sync):
+        """A provider failure is reported as a gateway error."""
+        mock_sync.return_value = {
+            "album": self.album,
+            "merged_into": None,
+            "synced_tracks": 0,
+            "missing_release": False,
+            "error": "provider down",
+        }
+        response = self.call_api(
+            "post",
+            "api_music_album_sync",
+            args=(self.album.id,),
+            payload={},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, HTTP.BAD_GATEWAY)
+
+
+class TrackNotesApiTests(MusicApiTestCase):
+    """Private track notes write contract."""
+
+    def test_notes_create_without_a_listen(self):
+        """Saving notes creates the Music row but no history record."""
+        response = self.call_api(
+            "patch",
+            "api_music_track_notes",
+            args=(self.track1.id,),
+            payload={"notes": "The ferry line"},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, HTTP.OK)
+        self.assertEqual(response.json()["notes"], "The ferry line")
+        music = Music.objects.get(user=self.user1, track=self.track1)
+        self.assertEqual(music.notes, "The ferry line")
+        self.assertFalse(music.history.exists())
+
+    def test_blank_note_leaves_untracked_track_alone(self):
+        """A blank note does not create a tracker row."""
+        response = self.call_api(
+            "patch",
+            "api_music_track_notes",
+            args=(self.track1.id,),
+            payload={"notes": ""},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, HTTP.OK)
+        self.assertFalse(Music.objects.filter(user=self.user1, track=self.track1).exists())

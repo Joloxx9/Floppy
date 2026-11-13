@@ -1,5 +1,5 @@
 {% extends "users/base.html" %}
-{% load i18n %}
+{% load i18n ui_tags %}
 
 {% load app_tags %}
 {% load socialaccount %}
@@ -19,13 +19,15 @@
         <h2 class="text-xl font-semibold">{% translate "Advanced" %}</h2>
       </div>
 
-      <div class="bg-[var(--color-surface-strong)] p-5 rounded-lg mb-6">
+      {{ advanced_props|json_script:"advanced-props" }}
+      <div class="space-y-6" data-advanced-settings-root data-props-id="advanced-props" x-ignore>
+      <div class="bg-[var(--color-surface-strong)] p-5 rounded-lg">
         <div class="flex items-center mb-3">
           {% include "app/icons/vertical-sliders.svg" with classes="w-5 h-5 text-[var(--color-link)] mr-2" %}
           <h3 class="text-base font-medium">{% translate "Logs & Bug Reports" %}</h3>
         </div>
         <p class="text-[var(--color-text-muted)] mb-4 text-sm">
-          {% translate "Logs may contain private activity. Administrators can download redacted logs and should review them before sharing." %}
+          {% translate "Logs may contain private activity. Administrators can download redacted logs and should review them before sharing. Everyone can download a diagnostic report with only server details and recent warnings and errors." %}
           {% if logs_since or last_unclean_exit %}
             <br>
             {% if logs_since %}{% blocktranslate %}Covers {{ logs_since }} onward.{% endblocktranslate %}{% endif %}
@@ -40,6 +42,10 @@
             {% translate "Download Sanitized Logs" %}
           </a>
           {% endif %}
+          <a href="{% url 'export_diagnostics' %}"
+             class="flex items-center px-4 py-2 bg-[var(--color-surface)] border border-gray-600 rounded-md hover:border-indigo-500 transition-colors text-sm">
+            {% translate "Download Diagnostic Report" %}
+          </a>
           <a href="https://github.com/dannyvfilms/Floppy/issues/new?title={{ bug_report_title|urlencode }}&body={{ bug_report_body|urlencode }}"
              target="_blank"
              rel="noopener noreferrer"
@@ -49,7 +55,7 @@
         </div>
       </div>
 
-      <div class="bg-[var(--color-surface-strong)] p-5 rounded-lg mb-6">
+      <div class="bg-[var(--color-surface-strong)] p-5 rounded-lg">
         <div class="flex items-center mb-3">
           {% include "app/icons/image.svg" with classes="w-5 h-5 text-[var(--color-link)] mr-2" %}
           <h3 class="text-base font-medium">{% translate "External Image Caching" %}</h3>
@@ -82,10 +88,7 @@
                        class="rounded border-gray-600 bg-[var(--color-surface)] text-indigo-600 focus:ring-indigo-500">
                 {% translate "Enable external image caching" %}
               </label>
-              <button type="submit"
-                      class="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-sm">
-                {% translate "Save" %}
-              </button>
+              {% button _("Save") "primary" "sm" submit=True %}
             </form>
             <form method="post"
                   action="{% url 'clear_image_cache' %}"
@@ -103,8 +106,7 @@
         {% endif %}
       </div>
 
-      <div class="bg-[var(--color-surface-strong)] p-5 rounded-lg mb-6"
-           x-data="{ confirmOpen: false, pending: null, openConfirm(key) { this.pending = key; this.confirmOpen = true; }, closeConfirm() { this.confirmOpen = false; this.pending = null; }, }">
+      <div class="bg-[var(--color-surface-strong)] p-5 rounded-lg">
         <div class="flex items-center mb-3">
           {% include "app/icons/trashcan.svg" with classes="w-5 h-5 text-[var(--color-link)] mr-2" %}
           <h3 class="text-base font-medium">{% translate "Cache Management" %}</h3>
@@ -357,10 +359,14 @@
           </div>
         </template>
       </div>
+      </div>
 
     </div>
   </div>
 
-  {% server_port_panel %}
+  {{ server_port_props|json_script:"server-port-props" }}
+  <div data-server-port-root data-props-id="server-port-props" x-ignore>
+    {% server_port_panel %}
+  </div>
 
 {% endblock settings_content %}

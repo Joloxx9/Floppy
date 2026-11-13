@@ -12,6 +12,7 @@ from app.models import (
     Movie,
     Season,
     Sources,
+    Status,
 )
 
 from .base import FloppyApiTestCase
@@ -101,6 +102,32 @@ class ItemMetadataTests(FloppyApiTestCase):
             response.status_code,
             (HTTP.BAD_REQUEST, HTTP.OK),
         )
+
+
+class MediaMetadataReadTests(FloppyApiTestCase):
+    """GET /media/{type}/{source}/{id}/metadata returns a tracked item."""
+
+    def test_tracked_item_is_projected_by_identity(self):
+        """The native detail page resolves the same item the card names."""
+        item = self.items_by_type[MediaTypes.MOVIE.value][0]
+        self.client.force_login(self.user1)
+        response = self.client.get(
+            f"/api/v1/media/{item.media_type}/{item.source}/{item.media_id}/metadata/"
+        )
+        self.assertEqual(response.status_code, HTTP.OK)
+        body = response.json()
+        self.assertEqual(body["item_id"], item.id)
+        self.assertEqual(body["identity"]["media_id"], item.media_id)
+        self.assertEqual(body["fields"]["title"], item.title)
+
+    def test_untracked_item_is_not_found(self):
+        """Another user's item is not readable through this endpoint."""
+        item = self.items_by_type[MediaTypes.MOVIE.value][0]
+        self.client.force_login(self.user1)
+        response = self.client.get(
+            f"/api/v1/media/{item.media_type}/{item.source}/missing-metadata-id/metadata/"
+        )
+        self.assertEqual(response.status_code, HTTP.NOT_FOUND)
 
 
 class ManualEpisodeMetadataTests(FloppyApiTestCase):
@@ -312,6 +339,46 @@ class EpisodeScoreTests(FloppyApiTestCase):
         self.assertEqual(cleared.status_code, HTTP.OK)
         episode.refresh_from_db()
         self.assertIsNone(episode.score)
+
+    def test_score_honours_library_bucket(self):
+        """A score aimed at the anime bucket must not land on the default season (#1873, B09)."""
+        show = Item.objects.create(
+            media_id="3001", source=Sources.TMDB.value,
+            media_type=MediaTypes.TV.value, title="Bucket Show", image="",
+        )
+        season_item = Item.objects.create(
+            media_id="3001", source=Sources.TMDB.value,
+            media_type=MediaTypes.SEASON.value, title="Bucket Show", image="",
+            season_number=1,
+        )
+        episode_item = Item.objects.create(
+            media_id="3001", source=Sources.TMDB.value,
+            media_type=MediaTypes.EPISODE.value, title="Bucket Show", image="",
+            season_number=1, episode_number=1,
+        )
+        tv = TV.objects.create(item=show, user=self.user1, status=Status.IN_PROGRESS.value)
+        season = Season.objects.create(
+            item=season_item, user=self.user1, related_tv=tv,
+            status=Status.IN_PROGRESS.value,
+        )
+        episode = Episode.objects.create(item=episode_item, related_season=season)
+
+        with patch(
+            "api.fork_views_metadata.resolve_or_create_season",
+            side_effect=RuntimeError("stop"),
+        ) as create_season:
+            response = self.call_api(
+                "patch",
+                "api_media_episode_score",
+                args=("tv", "tmdb", "3001", 1, 1),
+                params={"library_media_type": "anime"},
+                payload={"score": 9},
+                headers=self.auth_headers,
+            )
+
+        episode.refresh_from_db()
+        self.assertIsNone(episode.score, response.content)
+        self.assertEqual(create_season.call_args.args[4], "anime")
 
     def test_invalid_score_rejected(self):
         """Out-of-range and non-numeric scores return 400."""

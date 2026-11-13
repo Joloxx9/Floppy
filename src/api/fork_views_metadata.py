@@ -4,6 +4,7 @@ import logging
 from http import HTTPStatus as HTTP  # noqa: N814
 
 from django.apps import apps
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import views as drf_views
 from rest_framework.response import Response
@@ -30,7 +31,11 @@ from .helpers import (
     resolve_episode_coordinate_for_request,
     validate_episode_score,
 )
-from .schema import MEDIA_TYPE_PARAM, MEDIA_TYPE_TV_ONLY_PARAM
+from .schema import (
+    LIBRARY_MEDIA_TYPE_PARAM,
+    MEDIA_TYPE_PARAM,
+    MEDIA_TYPE_TV_ONLY_PARAM,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +61,28 @@ def _get_owned_tracked_item(user, item_id):
     if not _owned_media_queryset(user, item).exists():
         return None
     return item
+
+
+# /api/v1/media/[type]/[source]/[id]/metadata/
+class MediaMetadataView(drf_views.APIView):
+    """Return stored metadata for one tracked item by its provider identity."""
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request, media_type, source, media_id):
+        """Project the item's stored metadata for the native detail page."""
+        item = Item.objects.filter(
+            media_type=media_type,
+            source=source,
+            media_id=media_id,
+        ).first()
+        if item is None or not _owned_media_queryset(request.user, item).exists():
+            return Response(
+                {"detail": "Item not found in your library."},
+                status=HTTP.NOT_FOUND,
+            )
+        payload = project_item_metadata(item)
+        payload["item_id"] = item.id
+        return Response(payload, status=HTTP.OK)
 
 
 # /api/v1/metadata/items/[item_id]/image/
@@ -233,7 +260,7 @@ class MediaEpisodeScoreView(drf_views.APIView):
     """Set or clear the score on all plays of an episode."""
 
     @extend_schema(
-        parameters=[MEDIA_TYPE_TV_ONLY_PARAM],
+        parameters=[MEDIA_TYPE_TV_ONLY_PARAM, LIBRARY_MEDIA_TYPE_PARAM],
         responses={404: DetailErrorSerializer},
     )
     @rating_edit
@@ -286,7 +313,14 @@ class MediaEpisodeScoreView(drf_views.APIView):
         if error:
             return error
 
-        season = get_tracked_season(request.user, media_id, source, season_number)
+        library_media_type = request.query_params.get("library_media_type") or None
+        season = get_tracked_season(
+            request.user,
+            media_id,
+            source,
+            season_number,
+            library_media_type,
+        )
         if season is None and score is not None:
             # Like movies, shows and seasons, rating an untracked episode
             # starts tracking it as Planning; the rating is not a watch.
@@ -296,6 +330,7 @@ class MediaEpisodeScoreView(drf_views.APIView):
                     media_id,
                     source,
                     int(season_number),
+                    library_media_type or "",
                     status=Status.PLANNING.value,
                 )
             except Exception:

@@ -26,6 +26,21 @@ info:
     3. `POST /api/v1/media/{media_type}/` with `source` and `media_id` appends a new consumption; it never overwrites an existing one. Omitted `status` means Planning.
     4. `PATCH /api/v1/media/{media_type}/{source}/{media_id}/history/{consumption_id}/` changes exactly one consumption. Re-read `state` to verify.
 
+    ## Detail projection
+
+    `GET /api/v1/media/{media_type}/{source}/{media_id}/detail/` returns serializable
+    title, artwork, facts, synopsis, sections and viewer tracking capabilities for
+    shared web and native detail surfaces, including score/tag chips, links,
+    providers, cast/crew, related/recommendation cards, seasons, paginated episodes,
+    book formats, game lengths, game YouTube activity, viewer notes, recent
+    history and collection details when those builders return data. It contains no
+    server-rendered HTML. Anonymous callers receive public, read-only metadata;
+    `?public_view=1` suppresses viewer state and actions. Returned action
+    capabilities are authoritative; child watch/rating actions are limited to
+    signed-in, non-public TV detail views.
+    The companion `GET /api/v1/media/{media_type}/{source}/{media_id}/detail/gallery/`
+    resolves the deferred title logo, backdrop, gallery photos and trailer.
+
     ## Errors
 
     Error bodies keep their `detail` text and HTTP status. Where recovery differs they add a stable `code`:
@@ -55,6 +70,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -209,6 +225,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -255,6 +272,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -292,6 +310,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '202':
           content:
@@ -326,6 +345,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -368,9 +388,12 @@ paths:
                       - image
                       - owner
                       - collaborators
+                      - viewers
                       - items_count
                       - latest_update
+                      - visibility
                       - is_public
+                      - is_unlisted
                       - public_slug
                       - allow_recommendations
                       properties:
@@ -391,13 +414,26 @@ paths:
                           items:
                             type: object
                             additionalProperties: true
+                        viewers:
+                          type: array
+                          items:
+                            type: object
+                            additionalProperties: true
                         items_count:
                           type: integer
                         latest_update:
                           type: string
                           format: date-time
                           nullable: true
+                        visibility:
+                          type: string
+                          enum:
+                          - public
+                          - unlisted
+                          - private
                         is_public:
+                          type: boolean
+                        is_unlisted:
                           type: boolean
                         public_slug:
                           type: string
@@ -456,6 +492,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '201':
           content:
@@ -469,9 +506,12 @@ paths:
                 - image
                 - owner
                 - collaborators
+                - viewers
                 - items_count
                 - latest_update
+                - visibility
                 - is_public
+                - is_unlisted
                 - public_slug
                 - allow_recommendations
                 properties:
@@ -492,13 +532,26 @@ paths:
                     items:
                       type: object
                       additionalProperties: true
+                  viewers:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
                   items_count:
                     type: integer
                   latest_update:
                     type: string
                     format: date-time
                     nullable: true
+                  visibility:
+                    type: string
+                    enum:
+                    - public
+                    - unlisted
+                    - private
                   is_public:
+                    type: boolean
+                  is_unlisted:
                     type: boolean
                   public_slug:
                     type: string
@@ -565,6 +618,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -578,9 +632,12 @@ paths:
                 - image
                 - owner
                 - collaborators
+                - viewers
                 - items_count
                 - latest_update
+                - visibility
                 - is_public
+                - is_unlisted
                 - public_slug
                 - allow_recommendations
                 properties:
@@ -601,13 +658,26 @@ paths:
                     items:
                       type: object
                       additionalProperties: true
+                  viewers:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
                   items_count:
                     type: integer
                   latest_update:
                     type: string
                     format: date-time
                     nullable: true
+                  visibility:
+                    type: string
+                    enum:
+                    - public
+                    - unlisted
+                    - private
                   is_public:
+                    type: boolean
+                  is_unlisted:
                     type: boolean
                   public_slug:
                     type: string
@@ -667,6 +737,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '204':
           description: No response body
@@ -686,6 +757,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -989,6 +1061,15 @@ paths:
           - not
           - or
       - in: query
+        name: updated_since
+        schema:
+          type: string
+        description: ISO 8601 date or datetime. Only entries changed at or after it,
+          judged by each result's `updated_at`, which moves on any edit (status, score,
+          progress, dates, notes, lists, tags, episodes). Pair with `GET /library/activity/`
+          to skip a sync when nothing changed and `GET /library/deleted/` for removed
+          entries.
+      - in: query
         name: year
         schema:
           type: string
@@ -997,6 +1078,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -1297,6 +1379,15 @@ paths:
           - not
           - or
       - in: query
+        name: updated_since
+        schema:
+          type: string
+        description: ISO 8601 date or datetime. Only entries changed at or after it,
+          judged by each result's `updated_at`, which moves on any edit (status, score,
+          progress, dates, notes, lists, tags, episodes). Pair with `GET /library/activity/`
+          to skip a sync when nothing changed and `GET /library/deleted/` for removed
+          entries.
+      - in: query
         name: year
         schema:
           type: string
@@ -1305,6 +1396,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -1385,6 +1477,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '201':
           content:
@@ -1471,6 +1564,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -1565,6 +1659,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -1644,6 +1739,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '204':
           description: No response body
@@ -1701,6 +1797,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -1786,6 +1883,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '204':
           description: No response body
@@ -1849,6 +1947,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -1940,6 +2039,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '204':
           description: No response body
@@ -1991,6 +2091,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '400':
           content:
@@ -2064,6 +2165,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '201':
           content:
@@ -2117,6 +2219,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2160,6 +2263,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '400':
           content:
@@ -2180,6 +2284,106 @@ paths:
                 $ref: '#/components/schemas/DetailError'
           description: ''
       x-required-scope: watchlist:read
+  /api/v1/media/{media_type}/{source}/{media_id}/detail/:
+    get:
+      operationId: api_v1_media_detail_retrieve
+      description: Return serializable detail sections and permission capabilities.
+      parameters:
+      - in: query
+        name: detail_type
+        schema:
+          type: string
+      - in: query
+        name: episode_number
+        schema:
+          type: integer
+      - in: query
+        name: episode_page
+        schema:
+          type: integer
+      - in: path
+        name: media_id
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      - in: path
+        name: media_type
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      - in: query
+        name: public_view
+        schema:
+          type: boolean
+      - in: query
+        name: season_number
+        schema:
+          type: integer
+      - in: path
+        name: source
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      tags:
+      - api
+      security:
+      - bearerAuth: []
+      - ApiKeyAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+      x-required-scope: watchlist:read
+  /api/v1/media/{media_type}/{source}/{media_id}/detail/gallery/:
+    get:
+      operationId: api_v1_media_detail_gallery_retrieve
+      description: Return clearlogo, backdrop, photos and trailer data for the hero.
+      parameters:
+      - in: path
+        name: media_id
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      - in: path
+        name: media_type
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      - in: query
+        name: season_number
+        schema:
+          type: integer
+      - in: path
+        name: source
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      tags:
+      - api
+      security:
+      - bearerAuth: []
+      - ApiKeyAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+      x-required-scope: metadata:read
   /api/v1/media/{media_type}/{source}/{media_id}/history/{consumption_id}/:
     patch:
       operationId: updateMediaConsumption
@@ -2245,6 +2449,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2337,6 +2542,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2359,6 +2565,12 @@ paths:
       operationId: api_v1_media_lists_destroy
       description: Remove a specific media from a specific list.
       parameters:
+      - in: query
+        name: library_media_type
+        schema:
+          type: string
+        description: Library the tv show, season or episode is stored in. Set to `anime`
+          for titles in the Anime library; omitted means the regular TV library.
       - in: path
         name: list_id
         schema:
@@ -2402,6 +2614,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '204':
           description: No response body
@@ -2439,6 +2652,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2488,6 +2702,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '400':
           content:
@@ -2550,6 +2765,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2625,6 +2841,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2668,6 +2885,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '201':
           content:
@@ -2679,10 +2897,14 @@ paths:
     post:
       operationId: api_v1_podcasts_episodes_plays_create
       description: |-
-        Add a completed play.
+        Add a play and return its ``consumption_id``.
 
-        If end_date is omitted or blank, use the current server time. Report
-        a repeat within five minutes as HTTP 200 with duplicate set to true.
+        ``status`` defaults to Completed. A completed play with no end_date ends
+        now, and accepts an optional start_date. An In progress play takes a
+        start_date, ``progress`` (minutes) and ``played_up_to_seconds``, and has
+        no end_date; update the same play later with PATCH. A repeat of a
+        completed play within five minutes, or a second In progress play for the
+        episode, is reported as HTTP 200 with duplicate set to true.
       tags:
       - api
       requestBody:
@@ -2694,6 +2916,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2751,13 +2974,15 @@ paths:
         name: source
         schema:
           type: string
-        description: Provider to search (e.g. `tmdb`, `igdb`). Defaults to the media
-          type's default provider when omitted.
+        description: Provider to search (e.g. `tmdb`, `igdb`). Defaults to the viewer's
+          preferred provider for the media type (Settings > Metadata), falling back
+          to the media type's default provider when that one is not configured.
       tags:
       - api
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2816,6 +3041,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2842,6 +3068,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -2937,6 +3164,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -3100,6 +3328,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -3265,6 +3494,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -3394,6 +3624,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -3436,6 +3667,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '201':
           content:
@@ -3479,6 +3711,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -3515,6 +3748,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '204':
           description: No response body
@@ -3534,6 +3768,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -3572,6 +3807,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -3608,6 +3844,7 @@ paths:
       security:
       - bearerAuth: []
       - ApiKeyAuth: []
+      - cookieAuth: []
       responses:
         '200':
           content:
@@ -5247,6 +5484,13 @@ components:
           type: string
           format: date-time
           nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this entry last changed in any way (status, score, progress,
+            dates, notes, lists, tags, episodes watched). Use it with `updated_since`
+            on the media list to sync only what changed.
         score:
           type: number
           format: double
@@ -5331,6 +5575,7 @@ components:
       - status
       - total_episodes_left
       - tracked
+      - updated_at
     TrackedMediaUpdateRequest:
       type: object
       description: Tracked-media PATCH fields, including the shared item's artwork
@@ -5374,6 +5619,10 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
     listenBrainzToken:
       type: apiKey
       in: header

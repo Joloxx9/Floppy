@@ -5,8 +5,11 @@ from django.urls import re_path
 from . import (
     fork_views,
     fork_views_consumption_batch,
+    fork_views_detail,
     fork_views_discover,
     fork_views_integrations,
+    fork_views_library,
+    fork_views_library_changes,
     fork_views_lists,
     fork_views_metadata,
     fork_views_music,
@@ -23,6 +26,61 @@ from . import (
 )
 
 urlpatterns = [
+    re_path(
+        r"^lists/(?P<list_id>\d+)/items/bulk/?$",
+        fork_views_lists.ListItemsBulkAddView.as_view(),
+        name="api_list_items_bulk_add",
+    ),
+    re_path(
+        r"^library/saved-views/?$",
+        fork_views_library.LibrarySavedViewsView.as_view(),
+        name="api_library_saved_views",
+    ),
+    re_path(
+        r"^library/saved-views/reorder/?$",
+        fork_views_library.LibrarySavedViewsReorderView.as_view(),
+        name="api_library_saved_views_reorder",
+    ),
+    re_path(
+        r"^library/bulk/plays/?$",
+        fork_views_library.LibraryBulkPlaysView.as_view(),
+        name="api_library_bulk_plays",
+    ),
+    re_path(
+        r"^library/bulk/collection/?$",
+        fork_views_library.LibraryBulkCollectionView.as_view(),
+        name="api_library_bulk_collection",
+    ),
+    re_path(
+        r"^library/bulk/plays/(?P<operation_id>[a-f0-9]+)/?$",
+        fork_views_library.LibraryBulkPlaysStatusView.as_view(),
+        name="api_library_bulk_plays_status",
+    ),
+    re_path(
+        r"^library/activity/?$",
+        fork_views_library_changes.LibraryActivityView.as_view(),
+        name="api_library_activity",
+    ),
+    re_path(
+        r"^library/deleted/?$",
+        fork_views_library_changes.LibraryDeletedView.as_view(),
+        name="api_library_deleted",
+    ),
+    re_path(
+        r"^library/saved-views/(?P<view_id>\d+)/?$",
+        fork_views_library.LibrarySavedViewDetailView.as_view(),
+        name="api_library_saved_view_detail",
+    ),
+    re_path(
+        r"^media/(?P<media_type>[^/]+)/(?P<source>[^/]+)/(?P<media_id>[^/]+)/detail/gallery/?$",
+        fork_views_detail.DetailGalleryView.as_view(),
+        name="api_media_detail_gallery",
+    ),
+    re_path(
+        r"^media/(?P<media_type>[^/]+)/(?P<source>[^/]+)/(?P<media_id>[^/]+)/detail/?$",
+        fork_views_detail.DetailPageView.as_view(),
+        name="api_media_detail_page",
+    ),
     re_path(r"^sync/bootstrap/?$", fork_views_sync.SyncBootstrapView.as_view(), name="api_sync_bootstrap"),
     re_path(r"^sync/snapshot/?$", fork_views_sync.SyncSnapshotView.as_view(), name="api_sync_snapshot"),
     re_path(
@@ -49,6 +107,11 @@ urlpatterns = [
         r"^media/(?P<media_type>[^/]+)/(?P<source>[^/]+)/(?P<media_id>[^/]+)/provider-preference/?$",
         fork_views_metadata.MediaProviderPreferenceView.as_view(),
         name="api_media_provider_preference",
+    ),
+    re_path(
+        r"^media/(?P<media_type>[^/]+)/(?P<source>[^/]+)/(?P<media_id>[^/]+)/metadata/?$",
+        fork_views_metadata.MediaMetadataView.as_view(),
+        name="api_media_metadata",
     ),
     re_path(
         r"^metadata/items/(?P<item_id>\d+)/image/?$",
@@ -156,6 +219,16 @@ urlpatterns = [
         name="api_music_artist_plays",
     ),
     re_path(
+        r"^music/artists/(?P<artist_id>\d+)/relations/?$",
+        fork_views_music.MusicArtistRelationsView.as_view(),
+        name="api_music_artist_relations",
+    ),
+    re_path(
+        r"^music/artists/(?P<artist_id>\d+)/sync-members/?$",
+        fork_views_music.MusicArtistMembersSyncView.as_view(),
+        name="api_music_artist_members_sync",
+    ),
+    re_path(
         r"^music/albums/?$",
         fork_views_music.MusicAlbumsView.as_view(),
         name="api_music_albums",
@@ -176,6 +249,11 @@ urlpatterns = [
         name="api_music_album_plays",
     ),
     re_path(
+        r"^music/albums/(?P<album_id>\d+)/sync-metadata/?$",
+        fork_views_music.MusicAlbumSyncView.as_view(),
+        name="api_music_album_sync",
+    ),
+    re_path(
         r"^music/songs/plays/?$",
         fork_views_music.MusicSongPlayView.as_view(),
         name="api_music_song_play",
@@ -184,6 +262,11 @@ urlpatterns = [
         r"^music/tracks/(?P<music_id>\d+)/score/?$",
         fork_views_music.MusicTrackScoreView.as_view(),
         name="api_music_track_score",
+    ),
+    re_path(
+        r"^music/tracks/(?P<track_id>\d+)/notes/?$",
+        fork_views_music.MusicTrackNotesView.as_view(),
+        name="api_music_track_notes",
     ),
     re_path(
         r"^music/bulk-plays/?$",
@@ -231,9 +314,19 @@ urlpatterns = [
         name="api_video_play_detail",
     ),
     re_path(
+        r"^podcasts/episodes/(?P<episode_id>\d+)/notes/?$",
+        fork_views_podcast.PodcastEpisodeNotesView.as_view(),
+        name="api_podcast_episode_notes",
+    ),
+    re_path(
         r"^podcasts/episodes/plays/?$",
         fork_views_podcast.PodcastEpisodePlayView.as_view(),
         name="api_podcast_episode_play",
+    ),
+    re_path(
+        r"^podcasts/episodes/plays/(?P<consumption_id>\d+)/?$",
+        fork_views_podcast.PodcastEpisodePlayDetailView.as_view(),
+        name="api_podcast_episode_play_detail",
     ),
     re_path(
         r"^lists/(?P<list_id>\d+)/smart-rules/?$",
@@ -316,9 +409,29 @@ urlpatterns = [
         name="api_home",
     ),
     re_path(
+        r"^home/row/(?P<row_id>\d+)/?$",
+        fork_views_discover.HomeRowView.as_view(),
+        name="api_home_row",
+    ),
+    re_path(
+        r"^home/row/(?P<row_id>\d+)/sort/?$",
+        fork_views_discover.HomeRowDirectionView.as_view(),
+        name="api_home_row_sort",
+    ),
+    re_path(
+        r"^home/artwork/?$",
+        fork_views_discover.HomeArtworkView.as_view(),
+        name="api_home_artwork",
+    ),
+    re_path(
         r"^user/preferences/?$",
         fork_views_users.UserPreferencesView.as_view(),
         name="api_user_preferences",
+    ),
+    re_path(
+        r"^user/navigation/?$",
+        fork_views_users.UserNavigationView.as_view(),
+        name="api_user_navigation",
     ),
     re_path(
         r"^user/sidebar/?$",
@@ -374,6 +487,11 @@ urlpatterns = [
         r"^playback/now-playing/?$",
         fork_views_playback.NowPlayingView.as_view(),
         name="api_playback_now_playing",
+    ),
+    re_path(
+        r"^playback/home-cards/?$",
+        fork_views_playback.HomePlaybackCardsView.as_view(),
+        name="api_playback_home_cards",
     ),
     re_path(
         r"^scrobble/?$",

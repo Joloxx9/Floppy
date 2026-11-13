@@ -29,6 +29,8 @@ VERIFIED_OPERATIONS = frozenset(
         ("/api/v1/sync/snapshot/", "GET"),
         ("/api/v1/sync/changes/", "GET"),
         ("/api/v1/sync/progress-changes/", "GET"),
+        ("/api/v1/media/{media_type}/{source}/{media_id}/detail/", "GET"),
+        ("/api/v1/media/{media_type}/{source}/{media_id}/detail/gallery/", "GET"),
     }
 )
 
@@ -71,6 +73,21 @@ new consumption; it never overwrites an existing one. Omitted `status` means \
 Planning.
 4. `PATCH /api/v1/media/{media_type}/{source}/{media_id}/history/{consumption_id}/` \
 changes exactly one consumption. Re-read `state` to verify.
+
+## Detail projection
+
+`GET /api/v1/media/{media_type}/{source}/{media_id}/detail/` returns serializable
+title, artwork, facts, synopsis, sections and viewer tracking capabilities for
+shared web and native detail surfaces, including score/tag chips, links,
+providers, cast/crew, related/recommendation cards, seasons, paginated episodes,
+book formats, game lengths, game YouTube activity, viewer notes, recent
+history and collection details when those builders return data. It contains no
+server-rendered HTML. Anonymous callers receive public, read-only metadata;
+`?public_view=1` suppresses viewer state and actions. Returned action
+capabilities are authoritative; child watch/rating actions are limited to
+signed-in, non-public TV detail views.
+The companion `GET /api/v1/media/{media_type}/{source}/{media_id}/detail/gallery/`
+resolves the deferred title logo, backdrop, gallery photos and trailer.
 
 ## Errors
 
@@ -156,9 +173,12 @@ _LIST_SCHEMA = {
         "image",
         "owner",
         "collaborators",
+        "viewers",
         "items_count",
         "latest_update",
+        "visibility",
         "is_public",
+        "is_unlisted",
         "public_slug",
         "allow_recommendations",
     ],
@@ -169,13 +189,16 @@ _LIST_SCHEMA = {
         "image": {"type": "string", "nullable": True},
         "owner": {"type": "object", "additionalProperties": True},
         "collaborators": _ARRAY_SCHEMA,
+        "viewers": _ARRAY_SCHEMA,
         "items_count": {"type": "integer"},
         "latest_update": {
             "type": "string",
             "format": "date-time",
             "nullable": True,
         },
+        "visibility": {"type": "string", "enum": ["public", "unlisted", "private"]},
         "is_public": {"type": "boolean"},
+        "is_unlisted": {"type": "boolean"},
         "public_slug": {"type": "string", "nullable": True},
         "allow_recommendations": {"type": "boolean"},
         "items": {"oneOf": [_ARRAY_SCHEMA, _PAGINATED_SCHEMA]},
@@ -443,6 +466,9 @@ EXPECTED_SCHEMA_ERRORS: frozenset[SchemaFinding] = frozenset(
         ("api.fork_views_discover.DiscoverHiddenView", "serializer-unresolved"),
         ("api.fork_views_discover.DiscoverRefreshView", "serializer-unresolved"),
         ("api.fork_views_discover.DiscoverRowsView", "serializer-unresolved"),
+        ("api.fork_views_discover.HomeArtworkView", "serializer-unresolved"),
+        ("api.fork_views_discover.HomeRowDirectionView", "serializer-unresolved"),
+        ("api.fork_views_discover.HomeRowView", "serializer-unresolved"),
         ("api.fork_views_discover.HomeView", "serializer-unresolved"),
         ("api.fork_views_integrations.ExportCsvView", "serializer-unresolved"),
         ("api.fork_views_integrations.ExportTemplateView", "serializer-unresolved"),

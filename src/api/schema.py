@@ -55,8 +55,9 @@ class LiveSchemaView(SpectacularAPIView):
         """Serve dynamic OpenAPI schema with text/yaml content-type and inline disposition."""
         response = super().get(request, *args, **kwargs)
         is_json = request.accepted_renderer.format == "json"
+        disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
         response["Content-Disposition"] = (
-            f'inline; filename="openapi-live.{"json" if is_json else "yaml"}"'
+            f'{disposition}; filename="openapi-live.{"json" if is_json else "yaml"}"'
         )
         return response
 
@@ -104,6 +105,18 @@ MEDIA_TYPE_TV_ONLY_PARAM = OpenApiParameter(
 )
 
 MEDIA_LIST_FILTER_PARAMS = [
+    OpenApiParameter(
+        name="updated_since",
+        type=str,
+        location=OpenApiParameter.QUERY,
+        description=(
+            "ISO 8601 date or datetime. Only entries changed at or after it, "
+            "judged by each result's `updated_at`, which moves on any edit "
+            "(status, score, progress, dates, notes, lists, tags, episodes). "
+            "Pair with `GET /library/activity/` to skip a sync when nothing "
+            "changed and `GET /library/deleted/` for removed entries."
+        ),
+    ),
     OpenApiParameter(
         name="status",
         type=str,

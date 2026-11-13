@@ -7,6 +7,8 @@ from decimal import Decimal, InvalidOperation
 from http import HTTPStatus as HTTP  # noqa: N814
 
 from django.conf import settings
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import views as drf_views
 from rest_framework.response import Response
 
@@ -25,7 +27,11 @@ from app.score_views import (
     _collect_music_history_day_keys_for_album_ids,
     _collect_music_history_day_keys_for_artist,
 )
-from app.services.music import sync_artist_discography
+from app.services.music import (
+    sync_album_metadata,
+    sync_artist_discography,
+    sync_artist_members,
+)
 from app.services.music_scrobble import dedupe_artist_albums
 from app.tasks_bulk_plays import bulk_music_plays_task
 
@@ -35,6 +41,15 @@ from .serializers import serialize_data
 logger = logging.getLogger(__name__)
 
 _TRACKER_FIELDS = ("score", "status", "start_date", "end_date", "notes")
+_MUSIC_LIBRARY_FILTER_PARAMS = [
+    OpenApiParameter("search", OpenApiTypes.STR, description="Filter tracked names."),
+    OpenApiParameter("status", OpenApiTypes.STR, many=True, description="Filter tracker status."),
+    OpenApiParameter("rating", OpenApiTypes.STR, enum=["all", "rated", "unrated"]),
+    OpenApiParameter("rating_min", OpenApiTypes.NUMBER),
+    OpenApiParameter("rating_max", OpenApiTypes.NUMBER),
+    OpenApiParameter("sort", OpenApiTypes.STR, enum=["title", "score", "date_added", "start_date", "end_date", "release_date"]),
+    OpenApiParameter("direction", OpenApiTypes.STR, enum=["asc", "desc"]),
+]
 
 
 def _serialize_tracker(tracker):
@@ -49,6 +64,55 @@ def _serialize_tracker(tracker):
         "notes": tracker.notes,
         "created_at": tracker.created_at,
         "updated_at": tracker.updated_at,
+    }
+
+
+def _filtered_music_trackers(request, queryset, *, title_field, release_field=None):
+    """Apply the shared library search, status, rating and sort controls."""
+    query = request.query_params.get("search", "").strip()
+    if query:
+        queryset = queryset.filter(**{f"{title_field}__icontains": query})
+    statuses = request.query_params.getlist("status")
+    if statuses and "no_status" not in statuses:
+        queryset = queryset.filter(status__in=statuses)
+    elif "no_status" in statuses and len(statuses) == 1:
+        queryset = queryset.none()
+    rating = request.query_params.get("rating")
+    if rating == "rated":
+        queryset = queryset.filter(score__isnull=False)
+    elif rating == "unrated":
+        queryset = queryset.filter(score__isnull=True)
+    minimum = request.query_params.get("rating_min")
+    maximum = request.query_params.get("rating_max")
+    if minimum:
+        queryset = queryset.filter(score__gte=minimum)
+    if maximum:
+        queryset = queryset.filter(score__lte=maximum)
+    sort_fields = {
+        "title": title_field,
+        "score": "score",
+        "date_added": "created_at",
+        "start_date": "start_date",
+        "end_date": "end_date",
+    }
+    if release_field:
+        sort_fields["release_date"] = release_field
+    sort = request.query_params.get("sort", "date_added")
+    sort_field = sort_fields.get(sort, "created_at")
+    direction = "-" if request.query_params.get("direction") == "desc" else ""
+    return queryset.order_by(f"{direction}{sort_field}", "pk")
+
+
+def _serialize_relation(relation):
+    """Return one artist membership relation with the caller's tracker."""
+    artist = relation["artist"]
+    return {
+        "id": artist.id,
+        "name": artist.name,
+        "image": artist.image,
+        "role": relation["role"],
+        "current": relation["is_current"],
+        "tracker": _serialize_tracker(relation["tracker"]),
     }
 
 
@@ -121,13 +185,16 @@ def _invalidate_music_score_days(user, day_keys, reason):
 class MusicArtistsView(drf_views.APIView):
     """List tracked artists or start tracking one."""
 
+    @extend_schema(parameters=_MUSIC_LIBRARY_FILTER_PARAMS)
     def get(self, request):
         """Return the caller's artist trackers."""
         limit, offset, err = parse_limit_offset(request)
         if err:
             return err
-        trackers = ArtistTracker.objects.filter(user=request.user).select_related(
-            "artist",
+        trackers = _filtered_music_trackers(
+            request,
+            ArtistTracker.objects.filter(user=request.user).select_related("artist"),
+            title_field="artist__name",
         )
         results = [_serialize_artist(tracker.artist, tracker) for tracker in trackers]
         return Response(
@@ -292,18 +359,65 @@ class MusicArtistPlaysView(drf_views.APIView):
         return Response({"deleted_plays": count}, status=HTTP.OK)
 
 
+# /api/v1/music/artists/[artist_id]/relations/
+class MusicArtistRelationsView(drf_views.APIView):
+    """Return the artist's band members and the bands they belong to."""
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request, artist_id):
+        """Return normalized membership relations with the caller's trackers."""
+        from app.music_views import _build_artist_relations
+
+        artist = Artist.objects.filter(id=artist_id).first()
+        if artist is None:
+            return Response({"detail": "Artist not found."}, status=HTTP.NOT_FOUND)
+
+        members, also_in, _missing = _build_artist_relations(request.user, artist)
+        return Response(
+            {
+                "artist_id": artist.id,
+                "members": [_serialize_relation(relation) for relation in members],
+                "also_in": [_serialize_relation(relation) for relation in also_in],
+            },
+            status=HTTP.OK,
+        )
+
+
+# /api/v1/music/artists/[artist_id]/sync-members/
+class MusicArtistMembersSyncView(drf_views.APIView):
+    """Force a band-member sync for an artist (mirrors the web lazy sync)."""
+
+    @extend_schema(request=None, responses={200: OpenApiTypes.OBJECT})
+    def post(self, _request, artist_id):
+        """Sync members from MusicBrainz; returns the synced member count."""
+        artist = Artist.objects.filter(id=artist_id).first()
+        if artist is None:
+            return Response({"detail": "Artist not found."}, status=HTTP.NOT_FOUND)
+        try:
+            count = sync_artist_members(artist, force=True)
+        except Exception as e:
+            return Response(
+                {"detail": "Artist member sync failed.", "errors": str(e)},
+                status=HTTP.BAD_GATEWAY,
+            )
+        return Response({"synced_members": count or 0}, status=HTTP.OK)
+
+
 # /api/v1/music/albums/
 class MusicAlbumsView(drf_views.APIView):
     """List tracked albums or start tracking one."""
 
+    @extend_schema(parameters=_MUSIC_LIBRARY_FILTER_PARAMS)
     def get(self, request):
         """Return the caller's album trackers."""
         limit, offset, err = parse_limit_offset(request)
         if err:
             return err
-        trackers = AlbumTracker.objects.filter(user=request.user).select_related(
-            "album",
-            "album__artist",
+        trackers = _filtered_music_trackers(
+            request,
+            AlbumTracker.objects.filter(user=request.user).select_related("album", "album__artist"),
+            title_field="album__title",
+            release_field="album__release_date",
         )
         results = [_serialize_album(tracker.album, tracker) for tracker in trackers]
         return Response(
@@ -462,6 +576,36 @@ class MusicAlbumPlaysView(drf_views.APIView):
         return Response({"deleted_plays": count}, status=HTTP.OK)
 
 
+# /api/v1/music/albums/[album_id]/sync-metadata/
+class MusicAlbumSyncView(drf_views.APIView):
+    """Force album metadata and tracklist sync (mirrors the web action)."""
+
+    @extend_schema(request=None, responses={200: OpenApiTypes.OBJECT})
+    def post(self, _request, album_id):
+        """Rebuild the album's metadata and tracks from MusicBrainz."""
+        album = Album.objects.filter(id=album_id).first()
+        if album is None:
+            return Response({"detail": "Album not found."}, status=HTTP.NOT_FOUND)
+
+        result = sync_album_metadata(album)
+        if result["error"]:
+            return Response(
+                {"detail": "Album metadata sync failed.", "errors": result["error"]},
+                status=HTTP.BAD_GATEWAY,
+            )
+        return Response(
+            {
+                "album_id": result["album"].id,
+                "merged_into": result["merged_into"].id
+                if result["merged_into"] is not None
+                else None,
+                "synced_tracks": result["synced_tracks"],
+                "missing_release": result["missing_release"],
+            },
+            status=HTTP.OK,
+        )
+
+
 # /api/v1/music/songs/plays/
 class MusicSongPlayView(drf_views.APIView):
     """Record a listen for a song (mirrors web song_save)."""
@@ -540,6 +684,45 @@ class MusicTrackScoreView(drf_views.APIView):
         music.save()
         return Response(
             {"score": str(score) if score is not None else None},
+            status=HTTP.OK,
+        )
+
+
+# /api/v1/music/tracks/[track_id]/notes/
+class MusicTrackNotesView(drf_views.APIView):
+    """Edit private track notes without recording a listen."""
+
+    @extend_schema(request=OpenApiTypes.OBJECT, responses={200: OpenApiTypes.OBJECT})
+    def patch(self, request, track_id):
+        """Save notes on the caller's Music row for the catalog track."""
+        track = (
+            Track.objects.select_related("album__artist")
+            .filter(id=track_id)
+            .first()
+        )
+        if track is None:
+            return Response({"detail": "Track not found."}, status=HTTP.NOT_FOUND)
+        if "notes" not in request.data:
+            return Response(
+                {"detail": "'notes' is required."},
+                status=HTTP.BAD_REQUEST,
+            )
+        notes = request.data.get("notes")
+        if notes is not None and not isinstance(notes, str):
+            return Response(
+                {"detail": "'notes' must be a string or null."},
+                status=HTTP.BAD_REQUEST,
+            )
+        music = fork_services_music.set_track_notes(
+            request.user,
+            track,
+            notes or "",
+        )
+        return Response(
+            {
+                "track_id": track.id,
+                "notes": music.notes if music is not None else "",
+            },
             status=HTTP.OK,
         )
 

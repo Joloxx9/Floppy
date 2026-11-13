@@ -59,6 +59,11 @@ CAROUSEL_CACHE_TTL_SUCCESS = 60 * 60 * 24 * 7
 CAROUSEL_CACHE_TTL_ABSENT = 60 * 60 * 24
 
 
+def enabled(user=None):
+    """Return whether TMDB is configured."""
+    return credentials.is_configured("tmdb", user)
+
+
 def base_params(language=None):
     """Return the base TMDB request params for the given (or default) language."""
     return {
@@ -2728,7 +2733,8 @@ def pinned_provider_matches(item, pinned_names):
     if not item or not pinned_names or not item.watch_providers:
         return []
 
-    pinned_set = set(pinned_names)
+    # The pin endpoint stores trimmed names, so compare trimmed on both sides.
+    pinned_set = {str(name).strip() for name in pinned_names}
     providers = {}
     for region_data in item.watch_providers.values():
         if not isinstance(region_data, dict):
@@ -2737,7 +2743,7 @@ def pinned_provider_matches(item, pinned_names):
             *region_data.get("flatrate", []),
             *region_data.get("free", []),
         ]:
-            if provider.get("provider_name") not in pinned_set:
+            if str(provider.get("provider_name") or "").strip() not in pinned_set:
                 continue
             providers[provider.get("provider_id")] = provider
 
