@@ -23,6 +23,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext
 
+from app.artwork_sizes import card_image_url
 from app.helpers import progress_activity
 from app.library_query import FilterValues, LibraryQuery, LibraryQueryExecutor, SortSpec
 from app.library_query.adapters import (
@@ -3136,7 +3137,7 @@ def _library_row_executor(user, row, normalized_filters, *, seed: int):
         seed=seed,
         mixed=mixed,
     )
-    return LibraryQueryExecutor(user, query)
+    return LibraryQueryExecutor(user, query, share_shows=True)
 
 
 def _row_items(user, row, executor, offset, limit, *, seed):
@@ -3245,7 +3246,7 @@ def _custom_list_row_executor(user, row, *, seed: int):
         sort_list_id=row.custom_list_id,
         dedupe_cross_provider=False,
     )
-    return LibraryQueryExecutor(user, query)
+    return LibraryQueryExecutor(user, query, share_shows=True)
 
 
 def _custom_list_row_window(user, row, offset, limit, *, seed):
@@ -3583,8 +3584,9 @@ def _opposite_direction_artwork(user, row, limit: int = 8, *, seed: int = 0) -> 
     normalized = _normalized_filter_payload(row.filters or {}, row.media_type)
     executor = _library_row_executor(user, flipped, normalized, seed=seed)
     items, _total = _row_items(user, flipped, executor, 0, limit, seed=seed)
+    # The same card-size URL the card will load, so the prefetch warms that file.
     return [
-        item.image
+        card_image_url(item.image)
         for item in items
         if item.image and item.image != settings.IMG_NONE and item.image.startswith("http")
     ]
@@ -3690,7 +3692,7 @@ def _cached_released_ids(user, query) -> list[int]:
     released_ids = cache.get(key)
     if released_ids is None:
         with boundary("home_rank"):
-            released_ids = LibraryQueryExecutor(user, query).ranked_ids()
+            released_ids = LibraryQueryExecutor(user, query, share_shows=True).ranked_ids()
         cache.set(key, released_ids, cache_utils.HOME_ROW_RELEASED_CACHE_TTL)
         cache_utils.register_home_row_cache_key(user.id, key)
     return released_ids
@@ -3726,7 +3728,7 @@ def _episode_feed_row_window(user, row, offset, limit, seed):
     items, total = _row_items(
         user,
         row,
-        LibraryQueryExecutor(user, query),
+        LibraryQueryExecutor(user, query, share_shows=True),
         offset,
         limit,
         seed=seed,

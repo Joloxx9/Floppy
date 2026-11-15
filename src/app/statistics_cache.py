@@ -794,6 +794,22 @@ def _schedule_missing_day_builds(user, day_list, start_date, end_date) -> None:
         )
 
 
+def _eager_day_builder(user):
+    """Build a batch of missing days the way the background sync does.
+
+    Eager (test) mode has no worker, so reads build their missing days
+    inline. Going through ``statistics_sync._build_days`` builds each slice
+    from one range-wide prefetch instead of ~13 queries per day, and writes
+    the same day payloads to the cache.
+    """
+    from app import statistics_sync
+
+    def build(days):
+        return statistics_sync._build_days(user, sorted(days, reverse=True), None, {})
+
+    return build
+
+
 def get_statistics_minutes_by_type(user, start_date, end_date, range_name=None):
     """Return only minute totals for a statistics range.
 
@@ -815,6 +831,7 @@ def get_statistics_minutes_by_type(user, start_date, end_date, range_name=None):
             user,
             day_list,
             build_missing=True,
+            build_days=_eager_day_builder(user),
         )
     result = _aggregate_minutes_per_media_type_from_days(
         user,
@@ -852,7 +869,7 @@ def get_statistics_data(user, start_date, end_date, range_name=None):
         # Missing days are built in the background rather than inline so a
         # cold multi-year range can't block the request for minutes.
         day_list = _resolve_day_list(user, start_date, end_date)
-        if not day_list:
+        if not day_list and not apps.get_model("app", "AlbumTracker").objects.filter(user=user).exists():
             return _get_empty_statistics_data()
         build_missing = _eager_statistics_mode()
         data = _aggregate_statistics_from_days(
@@ -861,6 +878,7 @@ def get_statistics_data(user, start_date, end_date, range_name=None):
             start_date,
             end_date,
             build_missing=build_missing,
+            build_days=_eager_day_builder(user) if build_missing else None,
         )
         if not build_missing:
             _schedule_missing_day_builds(user, day_list, start_date, end_date)
