@@ -398,7 +398,9 @@ class SerializationTests(SimpleTestCase):
 
         self.assertIn("import app.migration_operations", source)
         namespace: dict = {}
-        exec(compile(source, "0001_scratch.py", "exec"), namespace)  # noqa: S102
+        # An angle-bracket name marks the code as having no file, so coverage
+        # skips it instead of failing its report on a missing 0001_scratch.py.
+        exec(compile(source, "<0001_scratch>", "exec"), namespace)  # noqa: S102
         rebuilt = namespace["Migration"].operations
         self.assertEqual(
             [type(operation) for operation in rebuilt],
