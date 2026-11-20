@@ -807,10 +807,13 @@ def _people_labels():
         "previous": str(_("Previous")),
         "next": str(_("Next")),
         "close": str(_("Close")),
+        "time": str(_("Time")),
+        "timePlayed": str(_("Time Played")),
+        "timeWatched": str(_("Time Watched")),
         "timeToBeat": str(_("Time to Beat")),
         "submissions": str(_("submissions")),
-        "timeToBeatPending": str(_("Fetching cached time-to-beat data in the background.")),
-        "timeToBeatEmpty": str(_("Time-to-beat data is not available yet.")),
+        "timeToBeatPending": str(_("Fetching")),
+        "timeToBeatEmpty": str(_("Not available")),
         "watchedOnYouTube": str(_("Watched on YouTube")),
         "started": str(_("Started")),
         "youtubeEstimate": str(
@@ -950,6 +953,7 @@ def _people_youtube_props(youtube_watch):
         "seconds": youtube_watch.get("seconds"),
         "hoursLabel": youtube_watch.get("hours_label") or "",
         "videos": youtube_watch.get("videos") or 0,
+        "channels": youtube_watch.get("channels") or [],
     }
 
 
@@ -999,16 +1003,19 @@ def _person_hero_props(context):
                     "%(value_1)s show", "%(value_1)s shows", count,
                 ) % {"value_1": count},
             })
-        counts.append({
-            "label": ngettext(
-                "%(count)s tracked read" if is_author else "%(count)s tracked play",
-                "%(count)s tracked reads" if is_author else "%(count)s tracked plays",
-                tracked_plays_count,
-            ) % {"count": tracked_plays_count},
-        })
-        tracked_hours_count = context.get("tracked_hours_count")
-        if tracked_hours_count:
-            counts.append({"label": str(tracked_hours_count)})
+        if context.get("talent_pending"):
+            counts.append({"label": _("Counting plays")})
+        else:
+            counts.append({
+                "label": ngettext(
+                    "%(count)s tracked read" if is_author else "%(count)s tracked play",
+                    "%(count)s tracked reads" if is_author else "%(count)s tracked plays",
+                    tracked_plays_count,
+                ) % {"count": tracked_plays_count},
+            })
+            tracked_hours_count = context.get("tracked_hours_count")
+            if tracked_hours_count:
+                counts.append({"label": str(tracked_hours_count)})
 
     return {
         "kind": "person",
@@ -1172,12 +1179,24 @@ class PeopleCastNode(template.Node):
             str(self.options["collapse_key"].resolve(context))
             if "collapse_key" in self.options else ""
         )
-        return _people_island(
-            context,
-            "cast",
-            _people_cast_props(context, row, source, collapse_key),
-            self.body.render(context),
-        )
+        media = context.get("media")
+        media_source = media.get("source") if isinstance(media, dict) else getattr(media, "source", None)
+        props = _people_cast_props(context, row, source, collapse_key)
+        # The server cards shown before React mounts read the same props, so a
+        # person link is built in one place for both (#1953).
+        pushed = {
+            "people_cast_cards": [
+                {"person": person, "card": card}
+                for person, card in zip(row.get("items") or [], props["items"], strict=True)
+            ],
+        }
+        # Episode pages have a route source but no media object for the legacy
+        # person-card fallback. Keep that fallback on the same provider as the rail.
+        if source and not media_source:
+            pushed["media"] = {"source": source}
+        with context.push(**pushed):
+            body = self.body.render(context)
+        return _people_island(context, "cast", props, body)
 
 
 @register.tag
@@ -1185,8 +1204,8 @@ def people_extras(parser, token):
     """Wrap one medium-extras section in the shared extras mount."""
     bits = token.split_contents()
     part = bits[1].strip("\"'") if len(bits) > 1 else ""
-    if part not in {"game_lengths", "youtube"}:
-        message = 'people_extras requires "game_lengths" or "youtube"'
+    if part not in {"game_lengths", "youtube", "time"}:
+        message = 'people_extras requires "game_lengths", "youtube" or "time"'
         raise template.TemplateSyntaxError(message)
     body = parser.parse(("endpeople_extras",))
     parser.delete_first_token()
@@ -1203,6 +1222,25 @@ class PeopleExtrasNode(template.Node):
 
     def render(self, context):
         """Render the shared extras view when this section has data."""
+        if self.part == "time":
+            # One Time card: played, watched on YouTube and time to beat.
+            if not _people_section_visible(context, "game", "content", "game_lengths"):
+                return self.body.render(context)
+            game_lengths = context.get("game_lengths")
+            youtube_watch = _people_youtube_props(context.get("youtube_watch"))
+            played = (context.get("activity_subtitle") or {}).get("duration_text") or ""
+            props = {
+                "kind": "extras",
+                "gameLengths": _people_game_lengths_props(
+                    game_lengths, context.get("game_lengths_pending"),
+                ) if game_lengths else None,
+                "youtubeWatch": youtube_watch,
+                "playedLabel": played.removesuffix(" played"),
+                "labels": _people_labels(),
+            }
+            if not (game_lengths or youtube_watch or played):
+                return self.body.render(context)
+            return _people_island(context, "extras", props, self.body.render(context))
         if self.part == "game_lengths":
             if not _people_section_visible(context, "game", "content", "game_lengths"):
                 return self.body.render(context)

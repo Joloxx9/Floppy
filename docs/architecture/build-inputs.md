@@ -44,6 +44,21 @@ pins today's bytes only.
    reference together.
 4. Run `scripts/test.sh app.tests.test_static_libraries`, then lint.
 
+## External-link marks
+
+These local images identify outbound destinations in the detail-page Links
+popover. They are not endorsements. The names and marks remain their owners'
+trademarks.
+
+| Service | Local asset | Source and rights note |
+|---|---|---|
+| SteamDB | `src/static/img/steamdb-logo.svg` | First-party inline favicon from `https://steamdb.info/`; no separate asset license was surfaced. |
+| ProtonDB | `src/static/img/protondb-logo.png` | First-party 192px PWA icon referenced by ProtonDB's manifest at `https://head.protondb.pages.dev/sites/protondb/manifest.json`; no separate asset license was surfaced. |
+| PCGamingWiki | `src/static/img/pcgamingwiki-logo.svg` | Original `PCGamingWiki_Favicon.svg` from the [file page](https://www.pcgamingwiki.com/wiki/File:PCGamingWiki_Favicon.svg) (2015). Its page exposes the site's CC BY-NC-SA 3.0 license; no separate file-specific terms were present in the supplied page dump. Attribute PCGamingWiki and honor noncommercial/share-alike terms, or obtain separate permission. |
+
+The PCGamingWiki favicon SVG is stored at
+`https://images.pcgamingwiki.com/9/93/PCGamingWiki_Favicon.svg`.
+
 ## Installer and bootstrap downloads
 
 | Input | Pin | Verified |
@@ -71,3 +86,13 @@ Bump the uv version, `UV_INSTALLER_SHA256` and `pyproject.toml` together.
 - OS package repositories and Docker's apt repository/GPG key
   (`scripts/install/docker.sh`), Homebrew's installer on macOS, and the Tailwind
   CLI are not pinned or digest-checked.
+
+## npm audit exceptions
+
+CI's two npm audits (the Expo proof at level high, the frontend build at any
+level) run through `scripts/npm_audit_gate.mjs`. They fail on every advisory
+except the ones listed in `.github/npm-audit-exceptions.json`. Each entry names
+one advisory, the reason it does not reach users, who approved it and an expiry
+date; after that date the audit fails again until the entry is removed or
+renewed. Add an entry only when no fixed release exists and the owner has
+approved it, and remove it as soon as the lockfiles pick up a fix.

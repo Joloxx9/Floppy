@@ -136,11 +136,41 @@ class LookupDueTests(TestCase):
         self._tag("found", timedelta(days=400))
         self.assertFalse(youtube_game.lookup_due(self.item))
 
+    def _play(self, ago):
+        from django.contrib.auth import get_user_model
+
+        from app.models import Video, VideoPlay
+
+        user = get_user_model().objects.create_user("viewer", password="x")
+        video = Video.objects.create(item=self.item, user=user)
+        VideoPlay.objects.create(
+            video=video, external_id="p1", end_date=timezone.now() - ago
+        )
+
     def test_not_found_waits_a_week(self):
+        self._play(timedelta(days=2))
         self._tag("not_found", timedelta(days=1))
         self.assertFalse(youtube_game.lookup_due(self.item))
         VideoGameTag.objects.update(checked_at=timezone.now() - timedelta(days=8))
         self.assertTrue(youtube_game.lookup_due(self.item))
+
+    def test_not_found_is_not_rechecked_once_nobody_watches_it(self):
+        """A tag added long after anyone watched is not worth a weekly fetch, forever."""
+        self._play(timedelta(days=45))
+        self._tag("not_found", timedelta(days=8))
+        self.assertFalse(youtube_game.lookup_due(self.item))
+        with patch("app.services.youtube_game.fetch_initial_data") as fetch:
+            self.assertEqual(youtube_game.backfill_due_items(), 0)
+        fetch.assert_not_called()
+
+    def test_recently_watched_not_found_is_rechecked_by_the_backfill(self):
+        self._play(timedelta(days=3))
+        self._tag("not_found", timedelta(days=8))
+        with patch(
+            "app.services.youtube_game.fetch_initial_data", return_value={}
+        ) as fetch:
+            self.assertEqual(youtube_game.backfill_due_items(), 1)
+        fetch.assert_called_once_with(self.item.media_id)
 
     def test_unavailable_backs_off_then_gives_up(self):
         self._tag("unavailable", timedelta(minutes=5), failures=1)
@@ -218,7 +248,25 @@ class WatchedForGameTests(TestCase):
         self._video(self.other, "v4", self.game.title, "2023", 900, 900)
         self.assertEqual(
             watch.watched_for_game(self.user, self.game),
-            {"videos": 2, "seconds": 1600, "hours_label": "26m", "estimated": True},
+            {"videos": 2, "seconds": 1600, "hours_label": "26m", "channels": [], "estimated": True},
+        )
+
+    def test_splits_watch_time_by_channel(self):
+        from app.services import youtube_game_watch as watch
+
+        first = self._video(self.user, "c1", self.game.title, "2023", 750, 1000)
+        second = self._video(self.user, "c2", self.game.title, "2023", 250, 1000)
+        first.channel = "Alpha"
+        first.save()
+        second.channel = "Beta"
+        second.save()
+        channels = watch.watched_for_game(self.user, self.game)["channels"]
+        self.assertEqual(
+            channels,
+            [
+                {"name": "Alpha", "seconds": 750, "percent": 75},
+                {"name": "Beta", "seconds": 250, "percent": 25},
+            ],
         )
 
     def test_wrong_year_and_missing_tags_do_not_match(self):
